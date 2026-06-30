@@ -1,0 +1,7 @@
+name = "worldcup-cloudflare"
+compatibility_date = "2026-06-30"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "worldcup_db"
+database_id = "PUT_YOUR_D1_DATABASE_ID_HERE"

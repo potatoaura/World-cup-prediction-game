@@ -1,0 +1,11 @@
+{
+  "name": "worldcup-cloudflare",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev public --d1 DB=worldcup_db"
+  },
+  "devDependencies": {
+    "wrangler": "latest"
+  }
+}
