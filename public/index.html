@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Cup Predictor v2.1</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>World Cup Predictor v2.1</h1>
+    <p>Stable core: accounts, bracket, bets, admin, bank and casino.</p>
+  </div>
+  <div id="auth" class="auth">
+    <input id="username" placeholder="username">
+    <input id="password" type="password" placeholder="password">
+    <input id="adminCode" placeholder="admin code">
+    <button onclick="register()">Register</button>
+    <button class="secondary" onclick="login()">Login</button>
+  </div>
+  <div id="me" class="me hidden">
+    <span id="meName"></span>
+    <button class="secondary" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<section id="stats" class="stats hidden">
+  <div>Wallet <b id="wallet">0</b></div>
+  <div>Bank <b id="bank">100</b></div>
+  <div>Debt <b id="debt">0</b></div>
+  <div>Rating <b id="rating">700</b></div>
+  <div>Score <b id="score">0</b></div>
+</section>
+
+<div class="layout">
+  <main class="panel">
+    <div class="head">
+      <h2>Knockout bracket</h2>
+      <button onclick="loadState()">Refresh</button>
+    </div>
+    <div id="errorBox" class="error hidden"></div>
+    <div id="bracket" class="bracket"></div>
+  </main>
+
+  <aside>
+    <section class="panel">
+      <h2>Bank</h2>
+      <p class="muted">Credit rating affects loans only.</p>
+      <input id="bankAmount" type="number" value="50" min="1">
+      <div class="buttons">
+        <button onclick="bankAction('withdraw')">Withdraw</button>
+        <button onclick="bankAction('deposit')">Deposit</button>
+        <button onclick="bankAction('loan')">Loan</button>
+        <button onclick="bankAction('repay')">Repay</button>
+        <button class="secondary" onclick="bankAction('nextDay')">Next day</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Slot</h2>
+      <input id="slotAmount" type="number" value="10" min="1">
+      <button onclick="slot()">Spin</button>
+      <div class="slot">
+        <div class="reel" id="reel1">BAR</div>
+        <div class="reel" id="reel2">SEVEN</div>
+        <div class="reel" id="reel3">CUP</div>
+      </div>
+      <p id="slotMsg" class="muted">Jackpot 0.5%, ordinary win 5%.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Roulette</h2>
+      <input id="rouletteAmount" type="number" value="10" min="1">
+      <input id="rouletteNumber" type="number" value="17" min="0" max="36">
+      <button onclick="roulette()">Spin</button>
+      <div class="wheelBox">
+        <canvas id="wheel" width="240" height="240"></canvas>
+        <div id="ball"></div>
+      </div>
+      <p id="rouletteMsg" class="muted">0 pays x36, other exact numbers x5.</p>
+    </section>
+
+    <section id="adminPanel" class="panel hidden">
+      <h2>Admin</h2>
+      <div id="adminList"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Leaderboard</h2>
+      <div id="leaderboard"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Log</h2>
+      <div id="log"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
