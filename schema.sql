@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS matches (
   id TEXT PRIMARY KEY,
   round TEXT NOT NULL,
+  stage TEXT,
+  sort_order INTEGER,
   label TEXT NOT NULL,
   teams TEXT NOT NULL,
   winner TEXT NOT NULL DEFAULT '',

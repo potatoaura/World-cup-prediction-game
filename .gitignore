@@ -110,6 +110,9 @@ dist
 # Serverless directories
 .serverless/
 
+# Cloudflare Wrangler local state
+.wrangler/
+
 # FuseBox cache
 .fusebox/
 
@@ -141,3 +144,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# OS files
+.DS_Store
