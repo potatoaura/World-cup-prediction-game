@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Cup Multiplayer Predictor</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="top">
+  <h1>World Cup Multiplayer Predictor</h1>
+  <div id="authBox" class="auth">
+    <input id="username" placeholder="username">
+    <input id="password" placeholder="password" type="password">
+    <input id="adminCode" placeholder="admin code optional">
+    <button onclick="register()">Register</button>
+    <button class="secondary" onclick="login()">Login</button>
+  </div>
+  <div id="userBox" class="hidden">
+    <div class="grid">
+      <div class="stat">User: <span id="meName">-</span></div>
+      <div class="stat">Wallet: <span id="wallet">0</span></div>
+      <div class="stat">Bank: <span id="bank">100</span></div>
+      <div class="stat">Debt: <span id="debt">0</span></div>
+      <div class="stat">Rating: <span id="rating">700</span></div>
+      <div class="stat">Score: <span id="score">0</span></div>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <main>
+    <section class="panel">
+      <h2>Matches, predictions and bets</h2>
+      <div id="matches"></div>
+    </section>
+  </main>
+
+  <aside>
+    <section class="panel">
+      <h2>Bank</h2>
+      <div class="small">Loans have credit rating and overdue penalties. Casino is separate.</div>
+      <input id="bankAmount" type="number" value="50" min="1">
+      <div class="buttons">
+        <button onclick="bankAction('withdraw')">Withdraw</button>
+        <button onclick="bankAction('deposit')">Deposit</button>
+        <button onclick="bankAction('loan')">Take loan</button>
+        <button onclick="bankAction('repay')">Repay</button>
+        <button class="secondary" onclick="bankAction('nextDay')">Next day</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Slot machine</h2>
+      <div class="small">Jackpot 0.5%. Ordinary win 5%. DIAMOND x200, SEVEN x100, CROWN x50, STAR x25, BAR x15, CHERRY x8, pair x2.</div>
+      <input id="slotAmount" type="number" value="10" min="1">
+      <button onclick="slot()">Spin slot</button>
+      <div class="slot">
+        <div class="reel" id="reel1">BAR</div>
+        <div class="reel" id="reel2">SEVEN</div>
+        <div class="reel" id="reel3">CUP</div>
+      </div>
+      <div id="slotMsg" class="small"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Roulette</h2>
+      <div class="small">Choose number 0–36. Normal number x5, green zero x36. Ball spins around the wheel.</div>
+      <input id="rouletteAmount" type="number" value="10" min="1">
+      <input id="rouletteNumber" type="number" value="17" min="0" max="36">
+      <button onclick="roulette()">Spin roulette</button>
+      <div class="wheelBox">
+        <canvas id="wheel" width="260" height="260"></canvas>
+        <div id="ball"></div>
+      </div>
+      <div id="rouletteMsg" class="small"></div>
+    </section>
+
+    <section class="panel hidden" id="adminPanel">
+      <h2>Admin panel</h2>
+      <div id="adminMatches"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Leaderboard</h2>
+      <div id="leaderboard"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Log</h2>
+      <div id="log"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
