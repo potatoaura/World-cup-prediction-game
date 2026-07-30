@@ -23,7 +23,7 @@ Environment variable:
 
 First admin: register and enter `ADMIN_CODE` in the optional admin code field.
 
-## v2.5 gameplay state
+## v2.6 gameplay state
 
 The World Cup bracket UI has been removed from the main screen. Match prediction and payout endpoints remain in the API as archived season support.
 
@@ -56,12 +56,14 @@ Casino behavior:
 
 - Slot jackpot chance is 0.1%.
 - Slot any-win chance is 2%.
-- Roulette uses a European wheel order. The server result drives the ball stop position and the UI tracks the ball with a side-angle close-up and ball-hop animation.
+- Roulette uses a European wheel order. The server result drives the ball stop position and the UI uses the previous stable zoom-and-ball-hop animation.
 
 Market behavior:
 
 - Players can buy and sell shares from the main screen.
-- Prices are stored in D1 and move periodically.
+- Prices are stored in D1 and move roughly every 45 seconds.
+- Market movement is intentionally risky: regular moves lean downward and there is a chance of sharper selloffs.
+- More companies are listed, and every asset card shows a saved price-history chart.
 - Portfolio value is included in player state.
 
 ## Local development

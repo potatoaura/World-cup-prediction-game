@@ -110,6 +110,13 @@ CREATE TABLE IF NOT EXISTS market_trades (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS market_history (
+  id TEXT PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  recorded_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_match_id ON predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_bets_match_status ON bets(match_id, status);
@@ -120,3 +127,4 @@ CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, s
 CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at);
 CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
 CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at);

@@ -16,15 +16,25 @@ const WORK_QUEST_POOL = [
 ];
 
 const MARKET_ASSETS = [
-  { symbol: "FIFA", name: "FIFA Media", price: 42, volatility: 8 },
-  { symbol: "PIZA", name: "Pizza Chain", price: 28, volatility: 12 },
-  { symbol: "HOTL", name: "Stadium Hotels", price: 67, volatility: 10 },
   { symbol: "BANK", name: "Credit Bank", price: 85, volatility: 7 },
-  { symbol: "CSNO", name: "Casino Group", price: 55, volatility: 16 },
   { symbol: "CLUB", name: "Football Club", price: 120, volatility: 14 },
+  { symbol: "CSNO", name: "Casino Group", price: 55, volatility: 18 },
+  { symbol: "ENER", name: "Energy Drinks", price: 32, volatility: 15 },
+  { symbol: "FIFA", name: "FIFA Media", price: 42, volatility: 8 },
+  { symbol: "FOOD", name: "Street Food", price: 19, volatility: 20 },
+  { symbol: "GEAR", name: "Fan Gear", price: 38, volatility: 16 },
+  { symbol: "HOTL", name: "Stadium Hotels", price: 67, volatility: 11 },
+  { symbol: "MED", name: "Sports Medicine", price: 74, volatility: 10 },
+  { symbol: "PIZA", name: "Pizza Chain", price: 28, volatility: 13 },
+  { symbol: "SHOP", name: "Corner Shop", price: 24, volatility: 14 },
+  { symbol: "TAXI", name: "Matchday Taxi", price: 46, volatility: 17 },
+  { symbol: "TECH", name: "Replay Tech", price: 96, volatility: 18 },
+  { symbol: "TRVL", name: "Travel Agency", price: 61, volatility: 19 },
+  { symbol: "TV", name: "Sports TV", price: 88, volatility: 12 },
 ];
 
-const MARKET_TICK_SECONDS = 180;
+const MARKET_TICK_SECONDS = 45;
+const MARKET_HISTORY_POINTS = 20;
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -233,12 +243,15 @@ export async function onRequest(context) {
       const elapsed = now - updatedAt;
       if (elapsed < MARKET_TICK_SECONDS) continue;
 
-      const steps = Math.min(4, Math.floor(elapsed / MARKET_TICK_SECONDS));
+      const steps = Math.min(8, Math.floor(elapsed / MARKET_TICK_SECONDS));
       let price = Number(asset.price);
       const previousPrice = price;
       for (let index = 0; index < steps; index++) {
         const swing = Math.max(1, Math.round(price * Number(asset.volatility) / 100));
-        const delta = Math.floor(Math.random() * (swing * 2 + 1)) - swing;
+        const selloff = Math.random() < 0.18;
+        const delta = selloff
+          ? -Math.max(1, Math.ceil(swing * (1 + Math.random() * 1.4)))
+          : Math.floor(Math.random() * (swing + 1)) * (Math.random() < 0.6 ? -1 : 1);
         price = Math.max(1, price + delta);
       }
       updates.push(DB.prepare(`
@@ -246,6 +259,10 @@ export async function onRequest(context) {
         SET previous_price = ?, price = ?, updated_at = ?
         WHERE symbol = ?
       `).bind(previousPrice, price, now, asset.symbol));
+      updates.push(DB.prepare(`
+        INSERT INTO market_history (id, symbol, price, recorded_at)
+        VALUES (?, ?, ?, ?)
+      `).bind(crypto.randomUUID(), asset.symbol, price, now));
     }
     if (updates.length) await DB.batch(updates);
   }
@@ -263,10 +280,26 @@ export async function onRequest(context) {
         AND market_holdings.user_id = ?
       ORDER BY market_assets.symbol
     `).bind(userId).all();
+    const historyRows = await DB.prepare(`
+      SELECT symbol, price, recorded_at
+      FROM market_history
+      ORDER BY symbol, recorded_at DESC
+      LIMIT 600
+    `).all();
+    const historyBySymbol = {};
+    for (const row of historyRows.results) {
+      if (!historyBySymbol[row.symbol]) historyBySymbol[row.symbol] = [];
+      if (historyBySymbol[row.symbol].length < MARKET_HISTORY_POINTS) {
+        historyBySymbol[row.symbol].push(Number(row.price));
+      }
+    }
     const assets = rows.results.map(asset => {
       const price = Number(asset.price);
       const previousPrice = Number(asset.previous_price || asset.price);
       const shares = Number(asset.shares || 0);
+      const history = (historyBySymbol[asset.symbol] || []).reverse();
+      if (history.length < 2) history.unshift(previousPrice);
+      if (history[history.length - 1] !== price) history.push(price);
       return {
         symbol: asset.symbol,
         name: asset.name,
@@ -278,6 +311,7 @@ export async function onRequest(context) {
         shares,
         averagePrice: Number(asset.average_price || 0),
         value: shares * price,
+        history: history.slice(-MARKET_HISTORY_POINTS),
       };
     });
     return {
@@ -790,12 +824,28 @@ async function ensureRuntimeTables(DB) {
         created_at INTEGER NOT NULL
       )
     `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS market_history (
+        id TEXT PRIMARY KEY,
+        symbol TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        recorded_at INTEGER NOT NULL
+      )
+    `),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at)"),
     ...MARKET_ASSETS.map(asset => DB.prepare(`
-      INSERT OR IGNORE INTO market_assets (symbol, name, price, previous_price, volatility, updated_at)
+      INSERT INTO market_assets (symbol, name, price, previous_price, volatility, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(symbol) DO UPDATE SET
+        name = excluded.name,
+        volatility = excluded.volatility
     `).bind(asset.symbol, asset.name, asset.price, asset.price, asset.volatility, now)),
+    ...MARKET_ASSETS.map(asset => DB.prepare(`
+      INSERT OR IGNORE INTO market_history (id, symbol, price, recorded_at)
+      VALUES (?, ?, ?, ?)
+    `).bind(`${asset.symbol}-initial`, asset.symbol, asset.price, now)),
   ]);
   runtimeTablesReady = true;
 }

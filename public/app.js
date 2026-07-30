@@ -5,10 +5,6 @@ let rouletteBusy = false;
 let serverClockOffsetSeconds = 0;
 let workRefreshQueued = false;
 let lastWorkPollAt = 0;
-let rouletteCameraFrame = 0;
-let lastRouletteTrack = null;
-
-const ROULETTE_SPIN_MS = 5400;
 
 const ROULETTE_NUMBERS = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
@@ -288,6 +284,29 @@ function maybePollWorkQuest() {
   loadState().finally(() => { workRefreshQueued = false; });
 }
 
+function marketSparkline(history, direction) {
+  const prices = (Array.isArray(history) ? history : [])
+    .map(price => Number(price))
+    .filter(price => Number.isFinite(price));
+  if (prices.length === 1) prices.unshift(prices[0]);
+  if (!prices.length) prices.push(0, 0);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = Math.max(1, max - min);
+  const lastIndex = Math.max(1, prices.length - 1);
+  const points = prices.map((price, index) => {
+    const x = (index / lastIndex) * 100;
+    const y = 36 - ((price - min) / range) * 30;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const trend = direction === "up" ? "up" : direction === "down" ? "down" : "flat";
+  return `
+    <svg class="marketChart ${trend}" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="${points}"></polyline>
+    </svg>
+  `;
+}
+
 function renderMarket() {
   const panel = el("marketPanel");
   if (!panel) return;
@@ -311,6 +330,7 @@ function renderMarket() {
           <b>${esc(asset.symbol)}</b>
           <span>${esc(asset.name)}</span>
         </div>
+        <div class="marketChartBox">${marketSparkline(asset.history, direction)}</div>
         <div>
           <strong>${asset.price}</strong>
           <small>${changeLabel}</small>
@@ -386,9 +406,9 @@ async function roulette() {
     const amount = Number(el("rouletteAmount").value);
     const number = Number(el("rouletteNumber").value);
     const result = await api("/api/casino/roulette", { amount, number });
-    const track = animateRoulette(result.result);
-    startRouletteCamera(track);
-    el("rouletteMsg").textContent = "Tracking ball";
+    startRouletteCamera();
+    animateRoulette(result.result);
+    el("rouletteMsg").textContent = "Camera rolling";
     setTimeout(async () => {
       el("rouletteMsg").textContent = result.win ? `Result ${result.result}: +${result.win}` : `Result ${result.result}: -${amount}`;
       settleRouletteCamera();
@@ -417,75 +437,29 @@ function animateRoulette(resultNumber) {
   const wheel = el("wheel");
   const ballOrbit = el("ballOrbit");
   const sector = 360 / ROULETTE_NUMBERS.length;
-  const startBallRotation = ballRotation;
   wheelRotation -= 1080 + sector * 5;
   const targetBall = rouletteAngle(resultNumber) + positiveMod(wheelRotation, 360) + 90;
   ballRotation += 1800 + positiveMod(targetBall - positiveMod(ballRotation, 360), 360);
   wheel.style.transform = `rotate(${wheelRotation}deg)`;
   ballOrbit.style.transform = `rotate(${ballRotation}deg)`;
-  return { startBallRotation, endBallRotation: ballRotation };
 }
 
-function easeOutCubic(value) {
-  return 1 - Math.pow(1 - value, 3);
-}
-
-function lerp(start, end, amount) {
-  return start + (end - start) * amount;
-}
-
-function rouletteFocus(angle) {
-  const radians = (positiveMod(angle, 360) * Math.PI) / 180;
-  const radius = 45;
-  return {
-    x: 50 + Math.sin(radians) * radius,
-    y: 50 - Math.cos(radians) * radius,
-  };
-}
-
-function setRouletteCameraPose(camera, angle, progress) {
-  const focus = rouletteFocus(angle);
-  const zoom = progress < 0.48
-    ? lerp(0.62, 1.08, progress / 0.48)
-    : lerp(1.08, 3.45, easeOutCubic((progress - 0.48) / 0.52));
-  const rotateX = lerp(24, 64, easeOutCubic(progress));
-  const rotateY = lerp(0, -22, easeOutCubic(Math.max(0, progress - 0.18) / 0.82));
-  const driftX = lerp(0, -9, progress);
-  const driftY = lerp(0, 7, progress);
-  camera.style.transformOrigin = `${focus.x}% ${focus.y}%`;
-  camera.style.transform = `perspective(1100px) translate3d(${driftX}%,${driftY}%,0) scale(${zoom}) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-}
-
-function startRouletteCamera(track) {
+function startRouletteCamera() {
   const camera = el("wheelCamera");
   const ball = el("ball");
   if (!camera || !ball) return;
-  if (rouletteCameraFrame) cancelAnimationFrame(rouletteCameraFrame);
-  lastRouletteTrack = track;
   camera.classList.remove("settled", "cinematic");
   ball.classList.remove("ballBounce");
   void camera.offsetWidth;
   void ball.offsetWidth;
   camera.classList.add("cinematic");
   ball.classList.add("ballBounce");
-
-  const startedAt = performance.now();
-  const step = now => {
-    const progress = Math.min(1, (now - startedAt) / ROULETTE_SPIN_MS);
-    const eased = easeOutCubic(progress);
-    const angle = lerp(track.startBallRotation, track.endBallRotation, eased);
-    setRouletteCameraPose(camera, angle, progress);
-    if (progress < 1) rouletteCameraFrame = requestAnimationFrame(step);
-  };
-  rouletteCameraFrame = requestAnimationFrame(step);
 }
 
 function settleRouletteCamera() {
   const camera = el("wheelCamera");
   const ball = el("ball");
   if (!camera || !ball) return;
-  if (rouletteCameraFrame) cancelAnimationFrame(rouletteCameraFrame);
-  if (lastRouletteTrack) setRouletteCameraPose(camera, lastRouletteTrack.endBallRotation, 1);
   camera.classList.remove("cinematic");
   camera.classList.add("settled");
   ball.classList.remove("ballBounce");

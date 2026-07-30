@@ -223,7 +223,11 @@ try {
   assert(Number.isInteger(roulette.slotIndex) && roulette.slotIndex >= 0 && roulette.slotIndex < 37, "bad roulette slot");
 
   const marketBefore = await request("/api/state", { session: player });
-  assert(marketBefore.market?.assets?.length >= 6, "market assets missing");
+  assert(marketBefore.market?.assets?.length >= 12, "market assets missing");
+  assert(
+    marketBefore.market.assets.every(asset => Array.isArray(asset.history) && asset.history.length >= 2),
+    "market price history missing"
+  );
   const tradeAsset = marketBefore.market.assets.find(asset => asset.price <= marketBefore.user.wallet);
   assert(tradeAsset, "no affordable market asset in smoke state");
   const buyMarket = await request("/api/market", {
