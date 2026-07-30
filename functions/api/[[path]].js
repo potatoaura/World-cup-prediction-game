@@ -77,11 +77,86 @@ const MARKET_ASSETS = [
 
 const MARKET_TICK_SECONDS = 45;
 const MARKET_HISTORY_POINTS = 20;
-const FOOD_PRICE = 18;
-const FOOD_HUNGER = 35;
 const HUNGER_DECAY_PER_DAY = 18;
-const RENT_PER_DAY = 22;
-const RENT_WARNING_DUE = 100;
+const THIRST_DECAY_PER_DAY = 24;
+
+const LIFE_ITEMS = [
+  { id: "water", name: "Mineral Water", type: "drink", price: 6, hunger: 0, thirst: 35, stockColumn: "water" },
+  { id: "snack", name: "Stadium Snack Box", type: "food", price: 14, hunger: 18, thirst: 0, stockColumn: "food" },
+  { id: "pizza", name: "Mozzarella Pizza", type: "food", price: 28, hunger: 45, thirst: -5, stockColumn: "pizza" },
+  { id: "steak", name: "Steak Dinner", type: "food", price: 55, hunger: 80, thirst: -8, stockColumn: "steak" },
+  { id: "sushi", name: "Sushi Box", type: "food", price: 42, hunger: 55, thirst: 4, stockColumn: "sushi" },
+  { id: "rose_cake", name: "Rose Berry Cake", type: "food", price: 36, hunger: 38, thirst: -4, stockColumn: "cake" },
+];
+
+const HOUSING_LISTINGS = [
+  {
+    id: "room",
+    name: "Starter Room",
+    area: "Old Town",
+    rent: 22,
+    deposit: 0,
+    comfort: 1,
+    x: 16,
+    y: 72,
+    description: "Cheap private room with a lock, shower, and basic bed.",
+  },
+  {
+    id: "clean_room",
+    name: "Clean Room",
+    area: "Market Street",
+    rent: 30,
+    deposit: 30,
+    comfort: 2,
+    x: 32,
+    y: 52,
+    description: "Cleaner building, better kitchen, and a quieter block.",
+  },
+  {
+    id: "studio",
+    name: "City Studio",
+    area: "Central Blocks",
+    rent: 45,
+    deposit: 80,
+    comfort: 3,
+    x: 51,
+    y: 42,
+    description: "Your own compact studio near shops and transport.",
+  },
+  {
+    id: "apartment",
+    name: "Arena Apartment",
+    area: "Stadium District",
+    rent: 85,
+    deposit: 180,
+    comfort: 4,
+    x: 70,
+    y: 35,
+    description: "Modern apartment close to the stadium and casino.",
+  },
+  {
+    id: "villa",
+    name: "Garden Villa",
+    area: "Hill Road",
+    rent: 160,
+    deposit: 360,
+    comfort: 5,
+    x: 84,
+    y: 20,
+    description: "Large house with a garden, quiet nights, and high status.",
+  },
+  {
+    id: "penthouse",
+    name: "Sky Penthouse",
+    area: "Tower Lane",
+    rent: 260,
+    deposit: 700,
+    comfort: 6,
+    x: 90,
+    y: 58,
+    description: "Top-floor luxury with the best view over the city.",
+  },
+];
 
 function initialMarketTickOffset(symbol) {
   const hash = [...symbol].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
@@ -151,6 +226,8 @@ export async function onRequest(context) {
   }
 
   function publicUser(user) {
+    const housing = selectedHousing(user.housing);
+    const inventory = lifeInventory(user);
     return {
       id: user.id,
       username: user.username,
@@ -166,12 +243,17 @@ export async function onRequest(context) {
       score: user.score,
       life: {
         hunger: Number(user.hunger ?? 100),
-        food: Number(user.food ?? 0),
+        thirst: Number(user.thirst ?? 100),
+        food: LIFE_ITEMS
+          .filter(item => item.type === "food")
+          .reduce((sum, item) => sum + Number(inventory[item.id] || 0), 0),
+        water: Number(inventory.water || 0),
+        inventory,
+        items: publicLifeItems(),
         rentDue: Number(user.rent_due ?? 0),
-        housing: user.housing || "Room",
-        foodPrice: FOOD_PRICE,
-        foodValue: FOOD_HUNGER,
-        rentPerDay: RENT_PER_DAY,
+        housing,
+        housingListings: publicHousingListings(),
+        rentPerDay: housing.rent,
       },
     };
   }
@@ -210,7 +292,8 @@ export async function onRequest(context) {
     const rows = await DB.prepare(`
       SELECT users.id, users.username, users.is_admin, users.wallet, users.bank, users.debt,
         users.rating, users.day, users.loan_due, users.score,
-        users.hunger, users.food, users.rent_due, users.housing,
+        users.hunger, users.thirst, users.food, users.water, users.pizza, users.steak,
+        users.sushi, users.cake, users.rent_due, users.housing,
         CASE WHEN bans.user_id IS NULL THEN 0 ELSE 1 END AS banned,
         bans.reason AS ban_reason
       FROM users
@@ -243,6 +326,50 @@ export async function onRequest(context) {
     if (hunger < 25) return "Hungry";
     if (hunger < 60) return "Okay";
     return "Fed";
+  }
+
+  function thirstStatus(thirst) {
+    if (thirst <= 0) return "Dehydrated";
+    if (thirst < 25) return "Thirsty";
+    if (thirst < 60) return "Okay";
+    return "Hydrated";
+  }
+
+  function publicLifeItems() {
+    return LIFE_ITEMS.map(({ stockColumn, ...item }) => item);
+  }
+
+  function lifeItem(itemId) {
+    const id = String(itemId || "").trim().toLowerCase();
+    return LIFE_ITEMS.find(item => item.id === id || item.stockColumn === id) || null;
+  }
+
+  function lifeInventory(user) {
+    const inventory = {};
+    for (const item of LIFE_ITEMS) {
+      inventory[item.id] = Number(user[item.stockColumn] ?? 0);
+    }
+    return inventory;
+  }
+
+  function housingKey(value) {
+    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+
+  function selectedHousing(value) {
+    const key = housingKey(value);
+    return HOUSING_LISTINGS.find(listing => (
+      listing.id === key || housingKey(listing.name) === key
+    )) || HOUSING_LISTINGS[0];
+  }
+
+  function housingListing(housingId) {
+    const key = housingKey(housingId);
+    return HOUSING_LISTINGS.find(listing => listing.id === key) || null;
+  }
+
+  function publicHousingListings() {
+    return HOUSING_LISTINGS.map(listing => ({ ...listing }));
   }
 
   function reason(value) {
@@ -324,10 +451,19 @@ export async function onRequest(context) {
       const previousPrice = price;
       for (let index = 0; index < steps; index++) {
         const swing = Math.max(1, Math.round(price * Number(asset.volatility) / 100));
-        const selloff = Math.random() < 0.18;
-        const delta = selloff
-          ? -Math.max(1, Math.ceil(swing * (1 + Math.random() * 1.4)))
-          : Math.floor(Math.random() * (swing + 1)) * (Math.random() < 0.6 ? -1 : 1);
+        const lastDirection = price < Number(asset.previous_price || price) ? "down" : "up";
+        const roll = Math.random();
+        let delta = 0;
+        if (roll < 0.07) {
+          delta = -Math.max(1, Math.ceil(swing * (0.9 + Math.random() * 1.1)));
+        } else if (roll < 0.17) {
+          delta = Math.max(1, Math.ceil(swing * (0.6 + Math.random() * 1.1)));
+        } else {
+          const upChance = lastDirection === "down" ? 0.56 : 0.49;
+          const direction = Math.random() < upChance ? 1 : -1;
+          delta = Math.floor(Math.random() * (swing + 1)) * direction;
+          if (delta === 0 && Math.random() < 0.35) delta = direction;
+        }
         price = Math.max(1, price + delta);
       }
       updates.push(DB.prepare(`
@@ -588,6 +724,9 @@ export async function onRequest(context) {
       if (Number(user.hunger ?? 100) <= 0) {
         return json({ error: "Eat food before completing work", quest: publicWorkQuest(quest) }, 400);
       }
+      if (Number(user.thirst ?? 100) <= 0) {
+        return json({ error: "Drink water before completing work", quest: publicWorkQuest(quest) }, 400);
+      }
 
       const current = nowSeconds();
       const remainingSeconds = Math.max(0, Number(quest.available_at) - current);
@@ -633,25 +772,48 @@ export async function onRequest(context) {
     const data = await body();
     const action = String(data.action || "");
     const amount = Math.max(1, money(data.amount || 1));
-    const food = Number(user.food ?? 0);
     const hunger = Number(user.hunger ?? 100);
+    const thirst = Number(user.thirst ?? 100);
     const rentDue = Number(user.rent_due ?? 0);
+    const currentHousing = selectedHousing(user.housing);
 
-    if (action === "buyFood") {
+    if (action === "buyItem" || action === "buyFood" || action === "buyWater") {
+      const item = lifeItem(action === "buyFood" ? "snack" : action === "buyWater" ? "water" : data.itemId);
+      if (!item) return json({ error: "Item not found" }, 404);
       const count = clamp(amount, 1, 20);
-      const cost = count * FOOD_PRICE;
-      if (cost > user.wallet) return json({ error: "Not enough wallet for food" }, 400);
-      await DB.prepare("UPDATE users SET wallet = wallet - ?, food = food + ? WHERE id = ?")
+      const cost = count * item.price;
+      if (cost > user.wallet) return json({ error: "Not enough wallet for item" }, 400);
+      await DB.prepare(`UPDATE users SET wallet = wallet - ?, ${item.stockColumn} = ${item.stockColumn} + ? WHERE id = ?`)
         .bind(cost, count, user.id).run();
-      return json({ ok: true, bought: count, cost });
+      return json({ ok: true, itemId: item.id, bought: count, cost });
     }
 
-    if (action === "eatFood") {
-      if (food < 1) return json({ error: "No food in storage" }, 400);
-      const nextHunger = clamp(hunger + FOOD_HUNGER, 0, 100);
-      await DB.prepare("UPDATE users SET food = food - 1, hunger = ? WHERE id = ?")
-        .bind(nextHunger, user.id).run();
-      return json({ ok: true, hunger: nextHunger, status: hungerStatus(nextHunger) });
+    if (action === "useItem" || action === "eatFood" || action === "drinkWater") {
+      const item = lifeItem(action === "eatFood" ? "snack" : action === "drinkWater" ? "water" : data.itemId);
+      if (!item) return json({ error: "Item not found" }, 404);
+      const stock = Number(user[item.stockColumn] ?? 0);
+      if (stock < 1) return json({ error: "No item in storage" }, 400);
+      const nextHunger = clamp(hunger + item.hunger, 0, 100);
+      const nextThirst = clamp(thirst + item.thirst, 0, 100);
+      await DB.prepare(`UPDATE users SET ${item.stockColumn} = ${item.stockColumn} - 1, hunger = ?, thirst = ? WHERE id = ?`)
+        .bind(nextHunger, nextThirst, user.id).run();
+      return json({
+        ok: true,
+        itemId: item.id,
+        hunger: nextHunger,
+        thirst: nextThirst,
+        status: `${hungerStatus(nextHunger)} / ${thirstStatus(nextThirst)}`,
+      });
+    }
+
+    if (action === "moveHousing") {
+      const listing = housingListing(data.housingId);
+      if (!listing) return json({ error: "Housing not found" }, 404);
+      if (listing.id === currentHousing.id) return json({ ok: true, housing: listing, cost: 0 });
+      if (listing.deposit > user.wallet) return json({ error: `Need ${listing.deposit} wallet for deposit` }, 400);
+      await DB.prepare("UPDATE users SET wallet = wallet - ?, housing = ? WHERE id = ?")
+        .bind(listing.deposit, listing.id, user.id).run();
+      return json({ ok: true, housing: listing, cost: listing.deposit });
     }
 
     if (action === "payRent") {
@@ -806,17 +968,20 @@ export async function onRequest(context) {
       let rating = user.rating;
       let due = user.loan_due;
       const day = user.day + 1;
+      const housing = selectedHousing(user.housing);
       const hunger = Math.max(0, Number(user.hunger ?? 100) - HUNGER_DECAY_PER_DAY);
-      const rentDue = Number(user.rent_due ?? 0) + RENT_PER_DAY;
+      const thirst = Math.max(0, Number(user.thirst ?? 100) - THIRST_DECAY_PER_DAY);
+      const rentDue = Number(user.rent_due ?? 0) + housing.rent;
       if (debt > 0 && due !== null && day > due) {
         rating = Math.max(300, rating - 50);
         debt = Math.ceil(debt * 1.15);
         due = day + 2;
       }
       if (hunger <= 0) rating = Math.max(300, rating - 15);
-      if (rentDue >= RENT_WARNING_DUE) rating = Math.max(300, rating - 10);
-      await DB.prepare("UPDATE users SET day=?, debt=?, rating=?, loan_due=?, hunger=?, rent_due=? WHERE id=?")
-        .bind(day, debt, rating, due, hunger, rentDue, user.id).run();
+      if (thirst <= 0) rating = Math.max(300, rating - 20);
+      if (rentDue >= Math.max(100, housing.rent * 4)) rating = Math.max(300, rating - 10);
+      await DB.prepare("UPDATE users SET day=?, debt=?, rating=?, loan_due=?, hunger=?, thirst=?, rent_due=?, housing=? WHERE id=?")
+        .bind(day, debt, rating, due, hunger, thirst, rentDue, housing.id, user.id).run();
     } else {
       return json({ error: "Bad action" }, 400);
     }
@@ -1057,9 +1222,15 @@ async function ensureRuntimeTables(DB) {
     `).bind(`${asset.symbol}-initial`, asset.symbol, asset.price, now)),
   ]);
   await ensureTableColumn(DB, "users", "hunger", "INTEGER NOT NULL DEFAULT 100");
+  await ensureTableColumn(DB, "users", "thirst", "INTEGER NOT NULL DEFAULT 100");
   await ensureTableColumn(DB, "users", "food", "INTEGER NOT NULL DEFAULT 1");
+  await ensureTableColumn(DB, "users", "water", "INTEGER NOT NULL DEFAULT 1");
+  await ensureTableColumn(DB, "users", "pizza", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "users", "steak", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "users", "sushi", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "users", "cake", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "users", "rent_due", "INTEGER NOT NULL DEFAULT 0");
-  await ensureTableColumn(DB, "users", "housing", "TEXT NOT NULL DEFAULT 'Room'");
+  await ensureTableColumn(DB, "users", "housing", "TEXT NOT NULL DEFAULT 'room'");
   await ensureTableColumn(DB, "work_quests", "description", "TEXT NOT NULL DEFAULT ''");
   await ensureTableColumn(DB, "work_quests", "objective", "TEXT NOT NULL DEFAULT ''");
   await ensureTableColumn(DB, "market_assets", "tick_offset", "INTEGER NOT NULL DEFAULT 0");

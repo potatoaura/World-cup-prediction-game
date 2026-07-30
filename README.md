@@ -23,7 +23,7 @@ Environment variable:
 
 First admin: register and enter `ADMIN_CODE` in the optional admin code field.
 
-## v2.8 gameplay state
+## v2.9 gameplay state
 
 The World Cup bracket UI has been removed from the main screen. Match prediction and payout endpoints remain in the API as archived season support.
 
@@ -55,11 +55,14 @@ Loan behavior:
 
 Life behavior:
 
-- Players have hunger, food storage, housing, and rent due.
-- Food can be bought with wallet money and eaten to restore hunger.
-- Advancing to the next day lowers hunger and adds rent due.
-- Zero hunger blocks work quest completion.
-- Overdue rent and starvation can reduce credit rating over time.
+- Players have hunger, thirst, food storage, water storage, housing, and rent due.
+- The life shop sells water, snacks, pizza, steak, sushi, and rose berry cake.
+- Food and drinks have different hunger and thirst effects.
+- Players can choose housing from listings shown beside a small city map.
+- Better housing costs a deposit and changes rent added each day.
+- Advancing to the next day lowers hunger and thirst and adds housing rent due.
+- Zero hunger or zero thirst blocks work quest completion.
+- Overdue rent, starvation, and dehydration can reduce credit rating over time.
 
 Casino behavior:
 
@@ -71,7 +74,8 @@ Market behavior:
 
 - Players can buy and sell shares from the main screen.
 - Prices are stored in D1 and move roughly every 45 seconds.
-- Market movement is intentionally risky: regular moves lean downward and there is a chance of sharper selloffs.
+- Market movement is risky but no longer broadly biased downward.
+- Each tick can produce a small move, a rare selloff, or a rally, with more rebound chance after drops.
 - Companies update on staggered timers instead of all changing at the same moment.
 - More companies are listed, every asset card shows a saved price-history chart, and clicking a company opens an all-time chart with the player's trade prices.
 - Portfolio value is included in player state.

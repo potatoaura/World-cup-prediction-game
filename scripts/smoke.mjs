@@ -214,14 +214,23 @@ try {
   assert(finalState.user.score === 5, `expected score 5, got ${finalState.user.score}`);
   assert(finalState.user.rating === 700, `expected rating 700, got ${finalState.user.rating}`);
   assert(finalState.user.life?.hunger === 100, "new player hunger missing");
+  assert(finalState.user.life?.thirst === 100, "new player thirst missing");
   assert(finalState.user.life?.food >= 1, "new player food storage missing");
+  assert(finalState.user.life?.water >= 1, "new player water storage missing");
+  assert(finalState.user.life?.items?.length >= 6, "life shop catalog missing");
+  assert(finalState.user.life?.housingListings?.length >= 5, "housing listings missing");
 
-  await request("/api/life", { method: "POST", body: { action: "buyFood", amount: 1 }, session: player });
-  await request("/api/life", { method: "POST", body: { action: "eatFood", amount: 1 }, session: player });
+  await request("/api/life", { method: "POST", body: { action: "buyItem", itemId: "pizza", amount: 1 }, session: player });
+  await request("/api/life", { method: "POST", body: { action: "useItem", itemId: "pizza", amount: 1 }, session: player });
+  await request("/api/life", { method: "POST", body: { action: "buyItem", itemId: "water", amount: 1 }, session: player });
+  await request("/api/life", { method: "POST", body: { action: "useItem", itemId: "water", amount: 1 }, session: player });
+  await request("/api/life", { method: "POST", body: { action: "moveHousing", housingId: "clean_room" }, session: player });
   await request("/api/bank", { method: "POST", body: { action: "nextDay", amount: 1 }, session: player });
   const lifeAfterDay = await request("/api/state", { session: player });
   assert(lifeAfterDay.user.life.hunger === 82, `expected hunger 82 after next day, got ${lifeAfterDay.user.life.hunger}`);
-  assert(lifeAfterDay.user.life.rentDue === 22, `expected rent due 22, got ${lifeAfterDay.user.life.rentDue}`);
+  assert(lifeAfterDay.user.life.thirst === 76, `expected thirst 76 after next day, got ${lifeAfterDay.user.life.thirst}`);
+  assert(lifeAfterDay.user.life.housing.id === "clean_room", "housing move did not persist");
+  assert(lifeAfterDay.user.life.rentDue === 30, `expected rent due 30, got ${lifeAfterDay.user.life.rentDue}`);
   await request("/api/life", { method: "POST", body: { action: "payRent", amount: 999 }, session: player });
   const lifeAfterRent = await request("/api/state", { session: player });
   assert(lifeAfterRent.user.life.rentDue === 0, `expected rent due 0, got ${lifeAfterRent.user.life.rentDue}`);

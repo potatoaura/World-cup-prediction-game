@@ -93,7 +93,9 @@ function render() {
       el(key).textContent = user[key];
     }
     el("hunger").textContent = user.life?.hunger ?? 100;
+    el("thirst").textContent = user.life?.thirst ?? 100;
     el("food").textContent = user.life?.food ?? 0;
+    el("water").textContent = user.life?.water ?? 0;
     el("rentDue").textContent = user.life?.rentDue ?? 0;
     el("loanDue").textContent = user.loanDue ?? "-";
     el("meName").textContent = `${user.username}${user.isAdmin ? " (admin)" : ""}${user.banned ? " (banned)" : ""}`;
@@ -189,9 +191,33 @@ async function bankAction(action) {
 
 async function lifeAction(action) {
   try {
-    const amount = action === "payRent" ? Number(el("rentAmount").value) : Number(el("foodAmount").value);
+    const amount = Number(el("rentAmount").value);
     await api("/api/life", { action, amount });
     log(`Life: ${action}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function lifeItemAction(action, itemId) {
+  try {
+    const input = el(`lifeAmount_${itemId}`);
+    const amount = Math.max(1, Number(input?.value || 1));
+    const result = await api("/api/life", { action, itemId, amount });
+    log(action === "buyItem"
+      ? `Bought ${result.bought} ${itemId} for ${result.cost}`
+      : `Used ${itemId}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function chooseHousing(housingId) {
+  try {
+    const result = await api("/api/life", { action: "moveHousing", housingId });
+    log(result.cost ? `Moved to ${result.housing.name} for ${result.cost}` : `Housing unchanged`);
     await loadState();
   } catch (error) {
     alert(error.message);
@@ -233,10 +259,11 @@ function renderClock() {
     : `Loan due day ${STATE.user.loanDue}`;
   const life = STATE.user.life || {};
   const hunger = Number(life.hunger ?? 100);
+  const thirst = Number(life.thirst ?? 100);
   const rentDue = Number(life.rentDue ?? 0);
   el("clockLife").textContent = rentDue > 0
     ? `Rent due ${rentDue}`
-    : hunger < 25 ? "Hungry" : "Life stable";
+    : thirst < 25 ? "Thirsty" : hunger < 25 ? "Hungry" : "Life stable";
 
   const quest = STATE.activeQuest;
   if (!quest) {
@@ -254,23 +281,92 @@ function renderLife() {
   if (!STATE.user || !el("lifePanel")) return;
   const life = STATE.user.life || {};
   const hunger = Number(life.hunger ?? 100);
+  const thirst = Number(life.thirst ?? 100);
   const food = Number(life.food ?? 0);
+  const water = Number(life.water ?? 0);
   const rentDue = Number(life.rentDue ?? 0);
-  const foodPrice = Number(life.foodPrice ?? 18);
-  const rentPerDay = Number(life.rentPerDay ?? 22);
+  const housing = life.housing || {};
+  const rentPerDay = Number(life.rentPerDay ?? housing.rent ?? 22);
+  const inventory = life.inventory || {};
+  const items = Array.isArray(life.items) ? life.items : [];
+  const listings = Array.isArray(life.housingListings) ? life.housingListings : [];
   el("lifeHunger").textContent = hunger;
   el("lifeHungerBar").style.width = `${Math.max(0, Math.min(100, hunger))}%`;
-  el("lifeFood").textContent = food;
-  el("lifeFoodPrice").textContent = `${foodPrice} each`;
-  el("lifeHousing").textContent = life.housing || "Room";
+  el("lifeThirst").textContent = thirst;
+  el("lifeThirstBar").style.width = `${Math.max(0, Math.min(100, thirst))}%`;
+  el("lifeStorage").textContent = `${food} food / ${water} water`;
+  el("lifeHousing").textContent = housing.name || "Starter Room";
+  el("lifeHousingArea").textContent = housing.area || "Old Town";
+  el("lifeComfort").textContent = `Comfort ${housing.comfort || 1}`;
   el("lifeRentPerDay").textContent = rentPerDay;
   el("lifeRentDue").textContent = rentDue;
   el("lifeRentStatus").textContent = rentDue > 0 ? "Unpaid" : "Paid";
-  const hungerText = hunger <= 0 ? "Eat before work." : hunger < 25 ? "Low hunger." : "Food restores hunger.";
+  el("lifeShop").innerHTML = items.map(item => {
+    const count = Number(inventory[item.id] || 0);
+    const effects = [
+      item.hunger ? `${item.hunger > 0 ? "+" : ""}${item.hunger} hunger` : "",
+      item.thirst ? `${item.thirst > 0 ? "+" : ""}${item.thirst} thirst` : "",
+    ].filter(Boolean).join(" / ") || "Storage item";
+    return `
+      <div class="shopItem ${item.type === "drink" ? "drink" : "food"}">
+        <div>
+          <b>${esc(item.name)}</b>
+          <span>${effects}</span>
+        </div>
+        <div class="shopMeta">
+          <strong>${item.price}</strong>
+          <small>Stock ${count}</small>
+        </div>
+        <div class="shopActions">
+          <input id="lifeAmount_${esc(item.id)}" type="number" value="1" min="1" max="20">
+          <button onclick="lifeItemAction('buyItem','${esc(item.id)}')" ${STATE.user.wallet < item.price ? "disabled" : ""}>Buy</button>
+          <button class="secondary" onclick="lifeItemAction('useItem','${esc(item.id)}')" ${count < 1 ? "disabled" : ""}>Use</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const selectedHousingId = housing.id || "room";
+  el("housingMap").innerHTML = listings.map(listing => `
+    <button
+      type="button"
+      class="housingPin ${listing.id === selectedHousingId ? "current" : ""}"
+      style="left:${Number(listing.x) || 50}%;top:${Number(listing.y) || 50}%"
+      title="${esc(listing.name)}"
+      onclick="chooseHousing('${esc(listing.id)}')"
+    >
+      ${listing.comfort}
+    </button>
+  `).join("");
+
+  el("housingListings").innerHTML = listings.map(listing => {
+    const current = listing.id === selectedHousingId;
+    const affordable = Number(STATE.user.wallet) >= Number(listing.deposit || 0);
+    return `
+      <div class="housingListing ${current ? "current" : ""}">
+        <div>
+          <b>${esc(listing.name)}</b>
+          <span>${esc(listing.area)}</span>
+          <small>${esc(listing.description)}</small>
+        </div>
+        <div class="housingPrice">
+          <strong>${listing.rent}/day</strong>
+          <small>Deposit ${listing.deposit}</small>
+          <small>Comfort ${listing.comfort}</small>
+        </div>
+        <button onclick="chooseHousing('${esc(listing.id)}')" ${current || !affordable ? "disabled" : ""}>
+          ${current ? "Current" : affordable ? "Move in" : "Need cash"}
+        </button>
+      </div>
+    `;
+  }).join("");
+
+  const hungerText = hunger <= 0 ? "Eat before work." : hunger < 25 ? "Low hunger." : "Food ready.";
+  const thirstText = thirst <= 0 ? " Drink water before work." : thirst < 25 ? " Low thirst." : "";
   el("lifeHint").textContent = rentDue >= 100
-    ? `${hungerText} Rent is overdue and can hurt rating.`
-    : `${hungerText} Rent grows each day.`;
-  if (rentDue > 0 && Number(el("rentAmount").value) === 22) {
+    ? `${hungerText}${thirstText} Rent is overdue.`
+    : `${hungerText}${thirstText} Rent grows each day.`;
+  if (rentDue > 0) {
     el("rentAmount").value = rentDue;
   }
 }
