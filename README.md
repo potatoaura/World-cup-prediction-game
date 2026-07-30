@@ -76,6 +76,7 @@ Market behavior:
 - Prices are stored in D1 and move roughly every 45 seconds.
 - Market movement is risky but no longer broadly biased downward.
 - Each tick can produce a small move, a rare selloff, or a rally, with more rebound chance after drops.
+- Assets keep a small fundamental price floor, so old selloff streaks cannot trap the whole board near 1 forever.
 - Companies update on staggered timers instead of all changing at the same moment.
 - More companies are listed, every asset card shows a saved price-history chart, and clicking a company opens an all-time chart with the player's trade prices.
 - Portfolio value is included in player state.

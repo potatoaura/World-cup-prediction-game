@@ -77,6 +77,7 @@ const MARKET_ASSETS = [
 
 const MARKET_TICK_SECONDS = 45;
 const MARKET_HISTORY_POINTS = 20;
+const MARKET_MIN_BASE_RATIO = 0.12;
 const HUNGER_DECAY_PER_DAY = 18;
 const THIRST_DECAY_PER_DAY = 24;
 
@@ -165,6 +166,10 @@ function initialMarketTickOffset(symbol) {
 
 function randomMarketTickOffset() {
   return 5 + Math.floor(Math.random() * Math.max(1, MARKET_TICK_SECONDS - 10));
+}
+
+function marketBasePrice(symbol) {
+  return Number(MARKET_ASSETS.find(asset => asset.symbol === symbol)?.price || 10);
 }
 
 export async function onRequest(context) {
@@ -449,22 +454,28 @@ export async function onRequest(context) {
       const steps = Math.min(8, Math.floor((elapsed - tickOffset) / MARKET_TICK_SECONDS));
       let price = Number(asset.price);
       const previousPrice = price;
+      const basePrice = marketBasePrice(asset.symbol);
+      const priceFloor = Math.max(1, Math.round(basePrice * MARKET_MIN_BASE_RATIO));
       for (let index = 0; index < steps; index++) {
         const swing = Math.max(1, Math.round(price * Number(asset.volatility) / 100));
         const lastDirection = price < Number(asset.previous_price || price) ? "down" : "up";
+        const valueRatio = price / basePrice;
         const roll = Math.random();
         let delta = 0;
-        if (roll < 0.07) {
+        if (roll < 0.07 && price > priceFloor) {
           delta = -Math.max(1, Math.ceil(swing * (0.9 + Math.random() * 1.1)));
         } else if (roll < 0.17) {
           delta = Math.max(1, Math.ceil(swing * (0.6 + Math.random() * 1.1)));
         } else {
-          const upChance = lastDirection === "down" ? 0.56 : 0.49;
+          let upChance = lastDirection === "down" ? 0.56 : 0.49;
+          if (valueRatio < 0.65) upChance += 0.18;
+          if (valueRatio > 1.35) upChance -= 0.14;
           const direction = Math.random() < upChance ? 1 : -1;
           delta = Math.floor(Math.random() * (swing + 1)) * direction;
           if (delta === 0 && Math.random() < 0.35) delta = direction;
         }
-        price = Math.max(1, price + delta);
+        if (valueRatio < 0.45 && delta < 1) delta = 1;
+        price = Math.max(priceFloor, price + delta);
       }
       updates.push(DB.prepare(`
         UPDATE market_assets
