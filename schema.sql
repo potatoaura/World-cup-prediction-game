@@ -70,9 +70,23 @@ CREATE TABLE IF NOT EXISTS admin_logs (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS work_quests (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  difficulty TEXT NOT NULL,
+  reward INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'posted',
+  available_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_match_id ON predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_bets_match_status ON bets(match_id, status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_user_match ON bets(user_id, match_id);
 CREATE INDEX IF NOT EXISTS idx_bans_admin_id ON bans(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_logs_target_user_id ON admin_logs(target_user_id);
+CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at);

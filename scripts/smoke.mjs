@@ -41,6 +41,7 @@ function startServer() {
     "wrangler", "pages", "dev", "public",
     "--d1", "DB=worldcup_db",
     "--binding", `ADMIN_CODE=${adminCode}`,
+    "--binding", "WORK_WAIT_SECONDS=2",
     "--persist-to", persistTo,
     "--port", String(port),
     "--compatibility-date=2026-07-07",
@@ -126,6 +127,10 @@ async function request(urlPath, { method = "GET", body, session } = {}) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function expectError(status, urlPath, options = {}) {
@@ -229,9 +234,36 @@ try {
     body: { userId: registeredBorrower.user.id, action: "takeWallet", amount: 9999, reason: "smoke broke borrower" },
     session: admin,
   });
-  await request("/api/bank", { method: "POST", body: { action: "work", amount: 0 }, session: borrower });
+  await expectError(400, "/api/bank", {
+    method: "POST",
+    body: { action: "work", amount: 0 },
+    session: borrower,
+  });
+  const postedWork = await request("/api/work", {
+    method: "POST",
+    body: { action: "post" },
+    session: borrower,
+  });
+  assert(postedWork.quest?.reward > 0, "work quest did not include reward");
+  const duplicateWork = await request("/api/work", {
+    method: "POST",
+    body: { action: "post" },
+    session: borrower,
+  });
+  assert(duplicateWork.existing, "posting while a quest is active should return existing quest");
+  await expectError(400, "/api/work", {
+    method: "POST",
+    body: { action: "complete" },
+    session: borrower,
+  });
+  await delay(2300);
+  const completedWork = await request("/api/work", {
+    method: "POST",
+    body: { action: "complete" },
+    session: borrower,
+  });
   const borrowerState = await request("/api/state", { session: borrower });
-  assert(borrowerState.user.wallet === 25, `expected borrower wallet 25, got ${borrowerState.user.wallet}`);
+  assert(borrowerState.user.wallet === completedWork.reward, `expected borrower wallet ${completedWork.reward}, got ${borrowerState.user.wallet}`);
   assert(borrowerState.user.debt === 180, `expected borrower debt 180, got ${borrowerState.user.debt}`);
 
   await request("/api/admin/userAction", {
@@ -239,9 +271,9 @@ try {
     body: { userId: registeredPlayer.user.id, action: "ban", amount: 0, reason: "smoke ban" },
     session: admin,
   });
-  await expectError(401, "/api/bank", {
+  await expectError(401, "/api/work", {
     method: "POST",
-    body: { action: "work", amount: 0 },
+    body: { action: "post" },
     session: player,
   });
   await expectError(403, "/api/login", {
@@ -272,6 +304,8 @@ try {
     rouletteResult: roulette.result,
     borrowerWallet: borrowerState.user.wallet,
     borrowerDebt: borrowerState.user.debt,
+    workReward: completedWork.reward,
+    workDifficulty: postedWork.quest.difficulty,
   }, null, 2));
 } catch (error) {
   console.error(serverOutput.trim());

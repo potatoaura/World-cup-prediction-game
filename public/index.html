@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prediction Economy v2.2</title>
+<title>Prediction Economy v2.3</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
   <div>
-    <h1>Prediction Economy v2.2</h1>
+    <h1>Prediction Economy v2.3</h1>
     <p>Persistent browser economy</p>
   </div>
   <div id="auth" class="auth">
@@ -37,6 +37,18 @@
   <div>Loan due <b id="loanDue">-</b></div>
 </section>
 
+<section id="timeWidget" class="timeWidget hidden">
+  <div class="clockFace">
+    <span id="clockTime">--:--:--</span>
+    <small id="clockDate">---</small>
+  </div>
+  <div class="clockChips">
+    <span id="clockDay">Day 0</span>
+    <span id="clockLoan">No loan due</span>
+    <span id="clockQuest">No work quest</span>
+  </div>
+</section>
+
 <div class="layout">
   <main class="mainGrid">
     <section class="panel bankPanel">
@@ -50,9 +62,17 @@
         <button onclick="bankAction('deposit')">Deposit</button>
         <button onclick="bankAction('loan')">Loan</button>
         <button onclick="bankAction('repay')">Repay</button>
-        <button onclick="bankAction('work')">Work +25</button>
         <button class="secondary" onclick="bankAction('nextDay')">Next day</button>
       </div>
+    </section>
+
+    <section id="workPanel" class="panel workPanel hidden">
+      <div class="head">
+        <h2>Work Board</h2>
+        <button id="postWorkBtn" onclick="postWorkAd()">Post ad</button>
+      </div>
+      <div id="workQuest" class="questBox"></div>
+      <button id="completeWorkBtn" class="wideAction" onclick="completeWorkQuest()" disabled>Complete quest</button>
     </section>
 
     <section class="panel">
@@ -74,9 +94,10 @@
       <div class="inlineControls">
         <input id="rouletteAmount" type="number" value="10" min="1">
         <input id="rouletteNumber" type="number" value="17" min="0" max="36">
-        <button onclick="roulette()">Spin</button>
+        <button id="rouletteButton" onclick="roulette()">Spin</button>
       </div>
-      <div class="wheelBox">
+      <div id="wheelBox" class="wheelBox">
+        <div class="wheelStageGlow"></div>
         <canvas id="wheel"></canvas>
         <div id="ballOrbit"><div id="ball"></div></div>
         <div class="wheelPointer"></div>

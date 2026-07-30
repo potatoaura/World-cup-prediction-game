@@ -5,12 +5,24 @@ const ROULETTE_NUMBERS = [
   5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
 ];
 
+const WORK_QUEST_POOL = [
+  { title: "Deliver stadium flyers", difficulty: "Easy", reward: 12 },
+  { title: "Clean a snack kiosk", difficulty: "Easy", reward: 16 },
+  { title: "Repair betting terminals", difficulty: "Standard", reward: 34 },
+  { title: "Guard VIP parking", difficulty: "Standard", reward: 42 },
+  { title: "Audit casino receipts", difficulty: "Hard", reward: 78 },
+  { title: "Recover missing sponsor files", difficulty: "Hard", reward: 95 },
+  { title: "Run a private finals event", difficulty: "Elite", reward: 145 },
+];
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api/, "") || "/";
   const DB = env.DB;
   const ADMIN_CODE = env.ADMIN_CODE || "";
+  const parsedWorkWait = Math.floor(Number(env.WORK_WAIT_SECONDS || 300));
+  const workWaitSeconds = Number.isFinite(parsedWorkWait) ? Math.max(1, parsedWorkWait) : 300;
   const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax${url.protocol === "https:" ? "; Secure" : ""}`;
 
   const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
@@ -142,6 +154,42 @@ export async function onRequest(context) {
     return String(value || "").trim().replace(/\s+/g, " ").slice(0, 160);
   }
 
+  function nowSeconds() {
+    return Math.floor(Date.now() / 1000);
+  }
+
+  function pickWorkQuest() {
+    return WORK_QUEST_POOL[Math.floor(Math.random() * WORK_QUEST_POOL.length)];
+  }
+
+  function publicWorkQuest(quest) {
+    if (!quest) return null;
+    const availableAt = Number(quest.available_at);
+    const remainingSeconds = Math.max(0, availableAt - nowSeconds());
+    return {
+      id: quest.id,
+      title: quest.title,
+      difficulty: quest.difficulty,
+      reward: Number(quest.reward),
+      status: quest.status,
+      createdAt: Number(quest.created_at),
+      availableAt,
+      completedAt: quest.completed_at === null || quest.completed_at === undefined ? null : Number(quest.completed_at),
+      remainingSeconds,
+      ready: quest.status === "posted" && remainingSeconds === 0,
+    };
+  }
+
+  async function activeWorkQuest(userId) {
+    return await DB.prepare(`
+      SELECT *
+      FROM work_quests
+      WHERE user_id = ? AND status = 'posted'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).bind(userId).first();
+  }
+
   async function audit(adminId, targetUserId, action, amount = 0, note = "") {
     await DB.prepare(`
       INSERT INTO admin_logs (id, admin_id, target_user_id, action, amount, reason)
@@ -164,7 +212,9 @@ export async function onRequest(context) {
       admin: !!user?.is_admin,
       matches: await allMatches(),
       leaderboard: leaders.results,
+      now: nowSeconds(),
     };
+    if (user) response.activeQuest = publicWorkQuest(await activeWorkQuest(user.id));
     if (user?.is_admin) response.adminUsers = await adminUsers();
     return json(response);
   }
@@ -216,6 +266,88 @@ export async function onRequest(context) {
   if (!user) return json({ error: "Login required" }, 401);
   if (user.banned) return json({ error: "Account banned", reason: user.ban_reason || "" }, 403);
 
+  if (path === "/work" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+
+    if (action === "post") {
+      const existing = await activeWorkQuest(user.id);
+      if (existing) return json({ ok: true, existing: true, quest: publicWorkQuest(existing) });
+
+      const selected = pickWorkQuest();
+      const createdAt = nowSeconds();
+      const quest = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        title: selected.title,
+        difficulty: selected.difficulty,
+        reward: selected.reward,
+        status: "posted",
+        created_at: createdAt,
+        available_at: createdAt + workWaitSeconds,
+        completed_at: null,
+      };
+      await DB.prepare(`
+        INSERT INTO work_quests (id, user_id, title, difficulty, reward, status, available_at, completed_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        quest.id,
+        quest.user_id,
+        quest.title,
+        quest.difficulty,
+        quest.reward,
+        quest.status,
+        quest.available_at,
+        quest.completed_at,
+        quest.created_at,
+      ).run();
+      return json({ ok: true, quest: publicWorkQuest(quest) });
+    }
+
+    if (action === "complete") {
+      const quest = await activeWorkQuest(user.id);
+      if (!quest) return json({ error: "No active work quest" }, 400);
+
+      const current = nowSeconds();
+      const remainingSeconds = Math.max(0, Number(quest.available_at) - current);
+      if (remainingSeconds > 0) {
+        return json({ error: "Quest not ready", remainingSeconds, quest: publicWorkQuest(quest) }, 400);
+      }
+
+      const reward = Number(quest.reward);
+      const results = await DB.batch([
+        DB.prepare(`
+          UPDATE users
+          SET wallet = wallet + (
+            SELECT reward
+            FROM work_quests
+            WHERE id = ? AND user_id = ? AND status = 'posted' AND available_at <= ?
+          )
+          WHERE id = ?
+            AND EXISTS (
+              SELECT 1
+              FROM work_quests
+              WHERE id = ? AND user_id = ? AND status = 'posted' AND available_at <= ?
+            )
+        `).bind(quest.id, user.id, current, user.id, quest.id, user.id, current),
+        DB.prepare(`
+          UPDATE work_quests
+          SET status = 'completed', completed_at = ?
+          WHERE id = ? AND user_id = ? AND status = 'posted' AND available_at <= ?
+        `).bind(current, quest.id, user.id, current),
+      ]);
+      if (!results[0]?.meta?.changes) return json({ error: "Quest already completed" }, 400);
+
+      return json({
+        ok: true,
+        reward,
+        quest: publicWorkQuest({ ...quest, status: "completed", completed_at: current }),
+      });
+    }
+
+    return json({ error: "Bad work action" }, 400);
+  }
+
   if (path === "/predict" && request.method === "POST") {
     const data = await body();
     const match = await DB.prepare("SELECT * FROM matches WHERE id=?").bind(data.matchId).first();
@@ -254,8 +386,7 @@ export async function onRequest(context) {
     const action = String(data.action || "");
 
     if (action === "work") {
-      await DB.prepare("UPDATE users SET wallet=wallet+25 WHERE id=?").bind(user.id).run();
-      return json({ ok: true, earned: 25 });
+      return json({ error: "Use the Work Board" }, 400);
     }
 
     const amount = Math.max(1, money(data.amount || 1));
@@ -464,6 +595,21 @@ async function ensureRuntimeTables(DB) {
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS work_quests (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        difficulty TEXT NOT NULL,
+        reward INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'posted',
+        available_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, status)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at)"),
   ]);
   runtimeTablesReady = true;
 }

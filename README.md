@@ -23,14 +23,14 @@ Environment variable:
 
 First admin: register and enter `ADMIN_CODE` in the optional admin code field.
 
-## v2.2 gameplay state
+## v2.3 gameplay state
 
 The World Cup bracket UI has been removed from the main screen. Match prediction and payout endpoints remain in the API as archived season support.
 
 Current main systems:
 
 - Accounts and sessions
-- Wallet, bank, debt, rating, and work income
+- Wallet, bank, debt, rating, and timed work quests
 - Slot and roulette casino games
 - Leaderboard
 - Admin user management
@@ -46,14 +46,15 @@ Admin users can:
 Loan behavior:
 
 - Players can take more than one loan while they still have available credit.
-- `Work +25` gives broke players a recovery path without using casino.
+- Work is now a board flow: post an ad, wait for a quest, then collect the quest reward.
+- Production work quests wait about 5 minutes by default.
 - Casino actions do not change credit rating.
 
 Casino behavior:
 
 - Slot jackpot chance is 0.1%.
 - Slot any-win chance is 2%.
-- Roulette uses a European wheel order. The server result drives the ball stop position.
+- Roulette uses a European wheel order. The server result drives the ball stop position and the UI plays a camera zoom / ball-hop animation.
 
 ## Local development
 
