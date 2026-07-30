@@ -21,8 +21,9 @@ export async function onRequest(context) {
   const path = url.pathname.replace(/^\/api/, "") || "/";
   const DB = env.DB;
   const ADMIN_CODE = env.ADMIN_CODE || "";
-  const parsedWorkWait = Math.floor(Number(env.WORK_WAIT_SECONDS || 300));
-  const workWaitSeconds = Number.isFinite(parsedWorkWait) ? Math.max(1, parsedWorkWait) : 300;
+  const fixedWorkWaitSeconds = positiveEnvInt(env.WORK_WAIT_SECONDS, 0);
+  const minWorkWaitSeconds = positiveEnvInt(env.WORK_WAIT_MIN_SECONDS, 120);
+  const maxWorkWaitSeconds = Math.max(minWorkWaitSeconds, positiveEnvInt(env.WORK_WAIT_MAX_SECONDS, 600));
   const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax${url.protocol === "https:" ? "; Secure" : ""}`;
 
   const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
@@ -158,25 +159,38 @@ export async function onRequest(context) {
     return Math.floor(Date.now() / 1000);
   }
 
+  function positiveEnvInt(value, fallback) {
+    const parsed = Math.floor(Number(value));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
   function pickWorkQuest() {
     return WORK_QUEST_POOL[Math.floor(Math.random() * WORK_QUEST_POOL.length)];
+  }
+
+  function pickWorkWaitSeconds() {
+    if (fixedWorkWaitSeconds > 0) return fixedWorkWaitSeconds;
+    return minWorkWaitSeconds + Math.floor(Math.random() * (maxWorkWaitSeconds - minWorkWaitSeconds + 1));
   }
 
   function publicWorkQuest(quest) {
     if (!quest) return null;
     const availableAt = Number(quest.available_at);
     const remainingSeconds = Math.max(0, availableAt - nowSeconds());
+    const ready = quest.status === "posted" && remainingSeconds === 0;
+    const revealed = quest.status !== "posted" || ready;
     return {
       id: quest.id,
-      title: quest.title,
-      difficulty: quest.difficulty,
-      reward: Number(quest.reward),
+      title: revealed ? quest.title : "",
+      difficulty: revealed ? quest.difficulty : "",
+      reward: revealed ? Number(quest.reward) : null,
       status: quest.status,
       createdAt: Number(quest.created_at),
       availableAt,
       completedAt: quest.completed_at === null || quest.completed_at === undefined ? null : Number(quest.completed_at),
       remainingSeconds,
-      ready: quest.status === "posted" && remainingSeconds === 0,
+      ready,
+      revealed,
     };
   }
 
@@ -284,7 +298,7 @@ export async function onRequest(context) {
         reward: selected.reward,
         status: "posted",
         created_at: createdAt,
-        available_at: createdAt + workWaitSeconds,
+        available_at: createdAt + pickWorkWaitSeconds(),
         completed_at: null,
       };
       await DB.prepare(`

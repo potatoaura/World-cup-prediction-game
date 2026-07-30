@@ -23,7 +23,7 @@ Environment variable:
 
 First admin: register and enter `ADMIN_CODE` in the optional admin code field.
 
-## v2.3 gameplay state
+## v2.4 gameplay state
 
 The World Cup bracket UI has been removed from the main screen. Match prediction and payout endpoints remain in the API as archived season support.
 
@@ -46,15 +46,15 @@ Admin users can:
 Loan behavior:
 
 - Players can take more than one loan while they still have available credit.
-- Work is now a board flow: post an ad, wait for a quest, then collect the quest reward.
-- Production work quests wait about 5 minutes by default.
+- Work is now a board flow: post an ad, wait while the offer is hidden, then reveal and collect the quest reward.
+- Production work quest search time is random by default: 2-10 minutes.
 - Casino actions do not change credit rating.
 
 Casino behavior:
 
 - Slot jackpot chance is 0.1%.
 - Slot any-win chance is 2%.
-- Roulette uses a European wheel order. The server result drives the ball stop position and the UI plays a camera zoom / ball-hop animation.
+- Roulette uses a European wheel order. The server result drives the ball stop position and the UI zooms from a distant wheel view into a close-up sector with a ball-hop animation.
 
 ## Local development
 

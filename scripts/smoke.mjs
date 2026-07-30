@@ -244,7 +244,8 @@ try {
     body: { action: "post" },
     session: borrower,
   });
-  assert(postedWork.quest?.reward > 0, "work quest did not include reward");
+  assert(postedWork.quest && !postedWork.quest.revealed, "work quest should stay hidden while searching");
+  assert(postedWork.quest.remainingSeconds >= 1, "work quest did not include search delay");
   const duplicateWork = await request("/api/work", {
     method: "POST",
     body: { action: "post" },
@@ -257,6 +258,9 @@ try {
     session: borrower,
   });
   await delay(2300);
+  const readyWorkState = await request("/api/state", { session: borrower });
+  assert(readyWorkState.activeQuest?.revealed, "work quest was not revealed after waiting");
+  assert(readyWorkState.activeQuest.reward > 0, "revealed work quest did not include reward");
   const completedWork = await request("/api/work", {
     method: "POST",
     body: { action: "complete" },
@@ -305,7 +309,7 @@ try {
     borrowerWallet: borrowerState.user.wallet,
     borrowerDebt: borrowerState.user.debt,
     workReward: completedWork.reward,
-    workDifficulty: postedWork.quest.difficulty,
+    workDifficulty: readyWorkState.activeQuest.difficulty,
   }, null, 2));
 } catch (error) {
   console.error(serverOutput.trim());

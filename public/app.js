@@ -3,6 +3,7 @@ let wheelRotation = 0;
 let ballRotation = 0;
 let rouletteBusy = false;
 let serverClockOffsetSeconds = 0;
+let workRefreshQueued = false;
 
 const ROULETTE_NUMBERS = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
@@ -204,7 +205,11 @@ function renderClock() {
     return;
   }
   const remaining = questRemaining(quest);
-  el("clockQuest").textContent = remaining > 0 ? `Work ${formatCountdown(remaining)}` : "Work ready";
+  if (!quest.revealed) {
+    el("clockQuest").textContent = remaining > 0 ? `Finding work ${formatCountdown(remaining)}` : "Job found";
+    return;
+  }
+  el("clockQuest").textContent = "Work ready";
 }
 
 function renderWorkQuest() {
@@ -220,6 +225,7 @@ function renderWorkQuest() {
 
   const quest = STATE.activeQuest;
   if (!quest) {
+    workRefreshQueued = false;
     postButton.disabled = false;
     completeButton.disabled = true;
     completeButton.textContent = "Complete quest";
@@ -237,6 +243,29 @@ function renderWorkQuest() {
   const duration = Math.max(1, Number(quest.availableAt) - Number(quest.createdAt || quest.availableAt));
   const progress = ready ? 100 : Math.max(6, Math.min(96, Math.round((1 - remaining / duration) * 100)));
   postButton.disabled = true;
+
+  if (!quest.revealed) {
+    completeButton.disabled = true;
+    completeButton.textContent = remaining > 0 ? formatCountdown(remaining) : "Loading quest";
+    box.innerHTML = `
+      <div class="questTop">
+        <b>Looking for a job</b>
+        <span>Ad posted</span>
+      </div>
+      <div class="questMeta">
+        <span>Quest hidden</span>
+        <span>${remaining > 0 ? `Offer in ${formatCountdown(remaining)}` : "Offer ready"}</span>
+      </div>
+      <div class="questProgress"><i style="width:${progress}%"></i></div>
+    `;
+    if (ready && !workRefreshQueued) {
+      workRefreshQueued = true;
+      loadState().finally(() => { workRefreshQueued = false; });
+    }
+    return;
+  }
+
+  workRefreshQueued = false;
   completeButton.disabled = !ready;
   completeButton.textContent = ready ? `Collect ${quest.reward}` : formatCountdown(remaining);
   box.innerHTML = `
@@ -339,23 +368,23 @@ function animateRoulette(resultNumber) {
 }
 
 function startRouletteCamera() {
-  const box = el("wheelBox");
+  const camera = el("wheelCamera");
   const ball = el("ball");
-  if (!box || !ball) return;
-  box.classList.remove("settled", "cinematic");
+  if (!camera || !ball) return;
+  camera.classList.remove("settled", "cinematic");
   ball.classList.remove("ballBounce");
-  void box.offsetWidth;
+  void camera.offsetWidth;
   void ball.offsetWidth;
-  box.classList.add("cinematic");
+  camera.classList.add("cinematic");
   ball.classList.add("ballBounce");
 }
 
 function settleRouletteCamera() {
-  const box = el("wheelBox");
+  const camera = el("wheelCamera");
   const ball = el("ball");
-  if (!box || !ball) return;
-  box.classList.remove("cinematic");
-  box.classList.add("settled");
+  if (!camera || !ball) return;
+  camera.classList.remove("cinematic");
+  camera.classList.add("settled");
   ball.classList.remove("ballBounce");
 }
 
@@ -377,7 +406,7 @@ async function adminUserAction(userId, action) {
 function drawWheel() {
   const canvas = el("wheel");
   if (!canvas) return;
-  const size = Math.round(canvas.getBoundingClientRect().width || 320);
+  const size = Math.round(canvas.clientWidth || canvas.getBoundingClientRect().width || 320);
   const dpr = window.devicePixelRatio || 1;
   if (canvas.width !== size * dpr || canvas.height !== size * dpr) {
     canvas.width = size * dpr;
