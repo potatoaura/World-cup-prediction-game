@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prediction Economy v2.4</title>
+<title>Prediction Economy v2.5</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
   <div>
-    <h1>Prediction Economy v2.4</h1>
+    <h1>Prediction Economy v2.5</h1>
     <p>Persistent browser economy</p>
   </div>
   <div id="auth" class="auth">
@@ -73,6 +73,21 @@
       </div>
       <div id="workQuest" class="questBox"></div>
       <button id="completeWorkBtn" class="wideAction" onclick="completeWorkQuest()" disabled>Complete quest</button>
+    </section>
+
+    <section id="marketPanel" class="panel marketPanel hidden">
+      <div class="head">
+        <h2>Market</h2>
+        <button class="secondary" onclick="loadState()">Refresh</button>
+      </div>
+      <div class="inlineControls marketTrade">
+        <select id="marketSymbol"></select>
+        <input id="marketShares" type="number" value="1" min="1">
+        <button onclick="marketAction('buy')">Buy</button>
+        <button class="secondary" onclick="marketAction('sell')">Sell</button>
+      </div>
+      <div class="marketSummary">Portfolio <b id="marketValue">0</b></div>
+      <div id="marketAssets" class="marketAssets"></div>
     </section>
 
     <section class="panel">

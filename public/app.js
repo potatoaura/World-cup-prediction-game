@@ -4,6 +4,11 @@ let ballRotation = 0;
 let rouletteBusy = false;
 let serverClockOffsetSeconds = 0;
 let workRefreshQueued = false;
+let lastWorkPollAt = 0;
+let rouletteCameraFrame = 0;
+let lastRouletteTrack = null;
+
+const ROULETTE_SPIN_MS = 5400;
 
 const ROULETTE_NUMBERS = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
@@ -70,6 +75,7 @@ function render() {
   el("stats").classList.toggle("hidden", !user);
   el("timeWidget").classList.toggle("hidden", !user);
   el("workPanel").classList.toggle("hidden", !user);
+  el("marketPanel").classList.toggle("hidden", !user);
   el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
 
   if (user) {
@@ -83,6 +89,7 @@ function render() {
   renderLeaderboard();
   renderAdmin();
   renderWorkQuest();
+  renderMarket();
   renderClock();
   drawWheel();
 }
@@ -177,7 +184,7 @@ function formatCountdown(seconds) {
 }
 
 function questRemaining(quest) {
-  if (!quest) return 0;
+  if (!quest || quest.availableAt === null || quest.availableAt === undefined) return null;
   return Math.max(0, Number(quest.availableAt) - currentServerSecond());
 }
 
@@ -204,9 +211,8 @@ function renderClock() {
     el("clockQuest").textContent = "No work quest";
     return;
   }
-  const remaining = questRemaining(quest);
   if (!quest.revealed) {
-    el("clockQuest").textContent = remaining > 0 ? `Finding work ${formatCountdown(remaining)}` : "Job found";
+    el("clockQuest").textContent = "Finding work";
     return;
   }
   el("clockQuest").textContent = "Work ready";
@@ -238,15 +244,12 @@ function renderWorkQuest() {
     return;
   }
 
-  const remaining = questRemaining(quest);
-  const ready = remaining <= 0;
-  const duration = Math.max(1, Number(quest.availableAt) - Number(quest.createdAt || quest.availableAt));
-  const progress = ready ? 100 : Math.max(6, Math.min(96, Math.round((1 - remaining / duration) * 100)));
+  const ready = !!quest.ready;
   postButton.disabled = true;
 
   if (!quest.revealed) {
     completeButton.disabled = true;
-    completeButton.textContent = remaining > 0 ? formatCountdown(remaining) : "Loading quest";
+    completeButton.textContent = "Waiting";
     box.innerHTML = `
       <div class="questTop">
         <b>Looking for a job</b>
@@ -254,20 +257,15 @@ function renderWorkQuest() {
       </div>
       <div class="questMeta">
         <span>Quest hidden</span>
-        <span>${remaining > 0 ? `Offer in ${formatCountdown(remaining)}` : "Offer ready"}</span>
+        <span>No timer</span>
       </div>
-      <div class="questProgress"><i style="width:${progress}%"></i></div>
     `;
-    if (ready && !workRefreshQueued) {
-      workRefreshQueued = true;
-      loadState().finally(() => { workRefreshQueued = false; });
-    }
     return;
   }
 
   workRefreshQueued = false;
   completeButton.disabled = !ready;
-  completeButton.textContent = ready ? `Collect ${quest.reward}` : formatCountdown(remaining);
+  completeButton.textContent = ready ? `Collect ${quest.reward}` : "Waiting";
   box.innerHTML = `
     <div class="questTop">
       <b>${esc(quest.title)}</b>
@@ -275,10 +273,69 @@ function renderWorkQuest() {
     </div>
     <div class="questMeta">
       <span>Reward <b>${quest.reward}</b></span>
-      <span>${ready ? "Ready" : `Ready in ${formatCountdown(remaining)}`}</span>
+      <span>Ready</span>
     </div>
-    <div class="questProgress"><i style="width:${progress}%"></i></div>
   `;
+}
+
+function maybePollWorkQuest() {
+  const quest = STATE.activeQuest;
+  if (!STATE.user || !quest || quest.revealed || workRefreshQueued) return;
+  const now = Date.now();
+  if (now - lastWorkPollAt < 15000) return;
+  lastWorkPollAt = now;
+  workRefreshQueued = true;
+  loadState().finally(() => { workRefreshQueued = false; });
+}
+
+function renderMarket() {
+  const panel = el("marketPanel");
+  if (!panel) return;
+  const market = STATE.market || { assets: [], value: 0 };
+  el("marketValue").textContent = market.value || 0;
+
+  const select = el("marketSymbol");
+  const selected = select.value;
+  select.innerHTML = (market.assets || []).map(asset => `
+    <option value="${esc(asset.symbol)}">${esc(asset.symbol)}</option>
+  `).join("");
+  if ((market.assets || []).some(asset => asset.symbol === selected)) select.value = selected;
+
+  const box = el("marketAssets");
+  box.innerHTML = (market.assets || []).map(asset => {
+    const direction = asset.change > 0 ? "up" : asset.change < 0 ? "down" : "flat";
+    const changeLabel = `${asset.change > 0 ? "+" : ""}${asset.change} (${asset.changePct > 0 ? "+" : ""}${asset.changePct}%)`;
+    return `
+      <div class="marketAsset ${direction}">
+        <div>
+          <b>${esc(asset.symbol)}</b>
+          <span>${esc(asset.name)}</span>
+        </div>
+        <div>
+          <strong>${asset.price}</strong>
+          <small>${changeLabel}</small>
+        </div>
+        <div>
+          <span>Shares ${asset.shares}</span>
+          <span>Value ${asset.value}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function marketAction(action) {
+  try {
+    const result = await api("/api/market", {
+      action,
+      symbol: el("marketSymbol").value,
+      shares: Number(el("marketShares").value),
+    });
+    log(`Market ${action}: ${result.shares} ${result.symbol} for ${result.total}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 async function postWorkAd() {
@@ -329,9 +386,9 @@ async function roulette() {
     const amount = Number(el("rouletteAmount").value);
     const number = Number(el("rouletteNumber").value);
     const result = await api("/api/casino/roulette", { amount, number });
-    startRouletteCamera();
-    animateRoulette(result.result);
-    el("rouletteMsg").textContent = "Camera rolling";
+    const track = animateRoulette(result.result);
+    startRouletteCamera(track);
+    el("rouletteMsg").textContent = "Tracking ball";
     setTimeout(async () => {
       el("rouletteMsg").textContent = result.win ? `Result ${result.result}: +${result.win}` : `Result ${result.result}: -${amount}`;
       settleRouletteCamera();
@@ -360,29 +417,75 @@ function animateRoulette(resultNumber) {
   const wheel = el("wheel");
   const ballOrbit = el("ballOrbit");
   const sector = 360 / ROULETTE_NUMBERS.length;
+  const startBallRotation = ballRotation;
   wheelRotation -= 1080 + sector * 5;
   const targetBall = rouletteAngle(resultNumber) + positiveMod(wheelRotation, 360) + 90;
   ballRotation += 1800 + positiveMod(targetBall - positiveMod(ballRotation, 360), 360);
   wheel.style.transform = `rotate(${wheelRotation}deg)`;
   ballOrbit.style.transform = `rotate(${ballRotation}deg)`;
+  return { startBallRotation, endBallRotation: ballRotation };
 }
 
-function startRouletteCamera() {
+function easeOutCubic(value) {
+  return 1 - Math.pow(1 - value, 3);
+}
+
+function lerp(start, end, amount) {
+  return start + (end - start) * amount;
+}
+
+function rouletteFocus(angle) {
+  const radians = (positiveMod(angle, 360) * Math.PI) / 180;
+  const radius = 45;
+  return {
+    x: 50 + Math.sin(radians) * radius,
+    y: 50 - Math.cos(radians) * radius,
+  };
+}
+
+function setRouletteCameraPose(camera, angle, progress) {
+  const focus = rouletteFocus(angle);
+  const zoom = progress < 0.48
+    ? lerp(0.62, 1.08, progress / 0.48)
+    : lerp(1.08, 3.45, easeOutCubic((progress - 0.48) / 0.52));
+  const rotateX = lerp(24, 64, easeOutCubic(progress));
+  const rotateY = lerp(0, -22, easeOutCubic(Math.max(0, progress - 0.18) / 0.82));
+  const driftX = lerp(0, -9, progress);
+  const driftY = lerp(0, 7, progress);
+  camera.style.transformOrigin = `${focus.x}% ${focus.y}%`;
+  camera.style.transform = `perspective(1100px) translate3d(${driftX}%,${driftY}%,0) scale(${zoom}) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+}
+
+function startRouletteCamera(track) {
   const camera = el("wheelCamera");
   const ball = el("ball");
   if (!camera || !ball) return;
+  if (rouletteCameraFrame) cancelAnimationFrame(rouletteCameraFrame);
+  lastRouletteTrack = track;
   camera.classList.remove("settled", "cinematic");
   ball.classList.remove("ballBounce");
   void camera.offsetWidth;
   void ball.offsetWidth;
   camera.classList.add("cinematic");
   ball.classList.add("ballBounce");
+
+  const startedAt = performance.now();
+  const step = now => {
+    const progress = Math.min(1, (now - startedAt) / ROULETTE_SPIN_MS);
+    const eased = easeOutCubic(progress);
+    const angle = lerp(track.startBallRotation, track.endBallRotation, eased);
+    setRouletteCameraPose(camera, angle, progress);
+    if (progress < 1) rouletteCameraFrame = requestAnimationFrame(step);
+  };
+  rouletteCameraFrame = requestAnimationFrame(step);
 }
 
 function settleRouletteCamera() {
   const camera = el("wheelCamera");
   const ball = el("ball");
   if (!camera || !ball) return;
+  if (rouletteCameraFrame) cancelAnimationFrame(rouletteCameraFrame);
+  if (lastRouletteTrack) setRouletteCameraPose(camera, lastRouletteTrack.endBallRotation, 1);
   camera.classList.remove("cinematic");
   camera.classList.add("settled");
   ball.classList.remove("ballBounce");
@@ -452,6 +555,16 @@ function drawWheel() {
     ctx.restore();
   }
 
+  for (let index = 0; index < ROULETTE_NUMBERS.length; index++) {
+    const angle = index * sector;
+    const x = center + Math.cos(angle) * (outer - 9);
+    const y = center + Math.sin(angle) * (outer - 9);
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(2, size * 0.009), 0, Math.PI * 2);
+    ctx.fillStyle = "#d8b85a";
+    ctx.fill();
+  }
+
   ctx.beginPath();
   ctx.arc(center, center, inner, 0, Math.PI * 2);
   ctx.fillStyle = "#222833";
@@ -470,4 +583,5 @@ loadState();
 setInterval(() => {
   renderClock();
   renderWorkQuest();
+  maybePollWorkQuest();
 }, 1000);

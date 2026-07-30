@@ -15,6 +15,17 @@ const WORK_QUEST_POOL = [
   { title: "Run a private finals event", difficulty: "Elite", reward: 145 },
 ];
 
+const MARKET_ASSETS = [
+  { symbol: "FIFA", name: "FIFA Media", price: 42, volatility: 8 },
+  { symbol: "PIZA", name: "Pizza Chain", price: 28, volatility: 12 },
+  { symbol: "HOTL", name: "Stadium Hotels", price: 67, volatility: 10 },
+  { symbol: "BANK", name: "Credit Bank", price: 85, volatility: 7 },
+  { symbol: "CSNO", name: "Casino Group", price: 55, volatility: 16 },
+  { symbol: "CLUB", name: "Football Club", price: 120, volatility: 14 },
+];
+
+const MARKET_TICK_SECONDS = 180;
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -179,18 +190,20 @@ export async function onRequest(context) {
     const remainingSeconds = Math.max(0, availableAt - nowSeconds());
     const ready = quest.status === "posted" && remainingSeconds === 0;
     const revealed = quest.status !== "posted" || ready;
-    return {
+    const base = {
       id: quest.id,
-      title: revealed ? quest.title : "",
-      difficulty: revealed ? quest.difficulty : "",
-      reward: revealed ? Number(quest.reward) : null,
       status: quest.status,
       createdAt: Number(quest.created_at),
-      availableAt,
-      completedAt: quest.completed_at === null || quest.completed_at === undefined ? null : Number(quest.completed_at),
-      remainingSeconds,
       ready,
       revealed,
+    };
+    if (!revealed) return base;
+    return {
+      ...base,
+      title: quest.title,
+      difficulty: quest.difficulty,
+      reward: Number(quest.reward),
+      completedAt: quest.completed_at === null || quest.completed_at === undefined ? null : Number(quest.completed_at),
     };
   }
 
@@ -211,6 +224,68 @@ export async function onRequest(context) {
     `).bind(crypto.randomUUID(), adminId, targetUserId, action, amount, note).run();
   }
 
+  async function refreshMarketPrices() {
+    const now = nowSeconds();
+    const rows = await DB.prepare("SELECT * FROM market_assets ORDER BY symbol").all();
+    const updates = [];
+    for (const asset of rows.results) {
+      const updatedAt = Number(asset.updated_at || 0);
+      const elapsed = now - updatedAt;
+      if (elapsed < MARKET_TICK_SECONDS) continue;
+
+      const steps = Math.min(4, Math.floor(elapsed / MARKET_TICK_SECONDS));
+      let price = Number(asset.price);
+      const previousPrice = price;
+      for (let index = 0; index < steps; index++) {
+        const swing = Math.max(1, Math.round(price * Number(asset.volatility) / 100));
+        const delta = Math.floor(Math.random() * (swing * 2 + 1)) - swing;
+        price = Math.max(1, price + delta);
+      }
+      updates.push(DB.prepare(`
+        UPDATE market_assets
+        SET previous_price = ?, price = ?, updated_at = ?
+        WHERE symbol = ?
+      `).bind(previousPrice, price, now, asset.symbol));
+    }
+    if (updates.length) await DB.batch(updates);
+  }
+
+  async function marketState(userId) {
+    await refreshMarketPrices();
+    const rows = await DB.prepare(`
+      SELECT market_assets.symbol, market_assets.name, market_assets.price,
+        market_assets.previous_price, market_assets.volatility, market_assets.updated_at,
+        COALESCE(market_holdings.shares, 0) AS shares,
+        COALESCE(market_holdings.average_price, 0) AS average_price
+      FROM market_assets
+      LEFT JOIN market_holdings
+        ON market_holdings.symbol = market_assets.symbol
+        AND market_holdings.user_id = ?
+      ORDER BY market_assets.symbol
+    `).bind(userId).all();
+    const assets = rows.results.map(asset => {
+      const price = Number(asset.price);
+      const previousPrice = Number(asset.previous_price || asset.price);
+      const shares = Number(asset.shares || 0);
+      return {
+        symbol: asset.symbol,
+        name: asset.name,
+        price,
+        previousPrice,
+        change: price - previousPrice,
+        changePct: previousPrice > 0 ? Math.round(((price - previousPrice) / previousPrice) * 1000) / 10 : 0,
+        volatility: Number(asset.volatility),
+        shares,
+        averagePrice: Number(asset.average_price || 0),
+        value: shares * price,
+      };
+    });
+    return {
+      assets,
+      value: assets.reduce((sum, asset) => sum + asset.value, 0),
+    };
+  }
+
   const user = await currentUser();
 
   if (path === "/state") {
@@ -228,7 +303,10 @@ export async function onRequest(context) {
       leaderboard: leaders.results,
       now: nowSeconds(),
     };
-    if (user) response.activeQuest = publicWorkQuest(await activeWorkQuest(user.id));
+    if (user) {
+      response.activeQuest = publicWorkQuest(await activeWorkQuest(user.id));
+      response.market = await marketState(user.id);
+    }
     if (user?.is_admin) response.adminUsers = await adminUsers();
     return json(response);
   }
@@ -325,7 +403,7 @@ export async function onRequest(context) {
       const current = nowSeconds();
       const remainingSeconds = Math.max(0, Number(quest.available_at) - current);
       if (remainingSeconds > 0) {
-        return json({ error: "Quest not ready", remainingSeconds, quest: publicWorkQuest(quest) }, 400);
+        return json({ error: "Quest not ready", quest: publicWorkQuest(quest) }, 400);
       }
 
       const reward = Number(quest.reward);
@@ -360,6 +438,62 @@ export async function onRequest(context) {
     }
 
     return json({ error: "Bad work action" }, 400);
+  }
+
+  if (path === "/market" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+    const symbol = String(data.symbol || "").trim().toUpperCase();
+    const shares = Math.max(1, money(data.shares || 1));
+
+    if (!["buy", "sell"].includes(action)) return json({ error: "Bad market action" }, 400);
+    await refreshMarketPrices();
+
+    const asset = await DB.prepare("SELECT * FROM market_assets WHERE symbol = ?").bind(symbol).first();
+    if (!asset) return json({ error: "Asset not found" }, 404);
+
+    const price = Number(asset.price);
+    const total = price * shares;
+    const holding = await DB.prepare("SELECT * FROM market_holdings WHERE user_id = ? AND symbol = ?")
+      .bind(user.id, symbol).first();
+    const currentShares = Number(holding?.shares || 0);
+    const currentAverage = Number(holding?.average_price || 0);
+
+    if (action === "buy") {
+      if (total > user.wallet) return json({ error: "Not enough wallet" }, 400);
+      const nextShares = currentShares + shares;
+      const averagePrice = Math.round(((currentShares * currentAverage) + total) / nextShares);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(total, user.id),
+        DB.prepare(`
+          INSERT INTO market_holdings (user_id, symbol, shares, average_price)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(user_id, symbol) DO UPDATE
+          SET shares = excluded.shares,
+            average_price = excluded.average_price
+        `).bind(user.id, symbol, nextShares, averagePrice),
+        DB.prepare(`
+          INSERT INTO market_trades (id, user_id, symbol, side, shares, price, total, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(crypto.randomUUID(), user.id, symbol, action, shares, price, total, nowSeconds()),
+      ]);
+    } else {
+      if (shares > currentShares) return json({ error: "Not enough shares" }, 400);
+      const nextShares = currentShares - shares;
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(total, user.id),
+        DB.prepare("UPDATE market_holdings SET shares = ? WHERE user_id = ? AND symbol = ?")
+          .bind(nextShares, user.id, symbol),
+        DB.prepare("DELETE FROM market_holdings WHERE user_id = ? AND symbol = ? AND shares <= 0")
+          .bind(user.id, symbol),
+        DB.prepare(`
+          INSERT INTO market_trades (id, user_id, symbol, side, shares, price, total, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(crypto.randomUUID(), user.id, symbol, action, shares, price, total, nowSeconds()),
+      ]);
+    }
+
+    return json({ ok: true, action, symbol, shares, price, total, market: await marketState(user.id) });
   }
 
   if (path === "/predict" && request.method === "POST") {
@@ -589,6 +723,7 @@ export async function onRequest(context) {
 
 async function ensureRuntimeTables(DB) {
   if (runtimeTablesReady) return;
+  const now = Math.floor(Date.now() / 1000);
   await DB.batch([
     DB.prepare(`
       CREATE TABLE IF NOT EXISTS bans (
@@ -624,6 +759,43 @@ async function ensureRuntimeTables(DB) {
     `),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, status)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at)"),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS market_assets (
+        symbol TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        previous_price INTEGER NOT NULL,
+        volatility INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS market_holdings (
+        user_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        shares INTEGER NOT NULL DEFAULT 0,
+        average_price INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(user_id, symbol)
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS market_trades (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL,
+        shares INTEGER NOT NULL,
+        price INTEGER NOT NULL,
+        total INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at)"),
+    ...MARKET_ASSETS.map(asset => DB.prepare(`
+      INSERT OR IGNORE INTO market_assets (symbol, name, price, previous_price, volatility, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(asset.symbol, asset.name, asset.price, asset.price, asset.volatility, now)),
   ]);
   runtimeTablesReady = true;
 }

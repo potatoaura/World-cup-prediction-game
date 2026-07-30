@@ -82,6 +82,34 @@ CREATE TABLE IF NOT EXISTS work_quests (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS market_assets (
+  symbol TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  previous_price INTEGER NOT NULL,
+  volatility INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS market_holdings (
+  user_id TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  shares INTEGER NOT NULL DEFAULT 0,
+  average_price INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(user_id, symbol)
+);
+
+CREATE TABLE IF NOT EXISTS market_trades (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  side TEXT NOT NULL,
+  shares INTEGER NOT NULL,
+  price INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_match_id ON predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_bets_match_status ON bets(match_id, status);
@@ -90,3 +118,5 @@ CREATE INDEX IF NOT EXISTS idx_bans_admin_id ON bans(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_logs_target_user_id ON admin_logs(target_user_id);
 CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at);
+CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
+CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);

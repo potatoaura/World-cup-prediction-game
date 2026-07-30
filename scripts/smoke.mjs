@@ -222,6 +222,23 @@ try {
   assert(Number.isInteger(roulette.result) && roulette.result >= 0 && roulette.result <= 36, "bad roulette result");
   assert(Number.isInteger(roulette.slotIndex) && roulette.slotIndex >= 0 && roulette.slotIndex < 37, "bad roulette slot");
 
+  const marketBefore = await request("/api/state", { session: player });
+  assert(marketBefore.market?.assets?.length >= 6, "market assets missing");
+  const tradeAsset = marketBefore.market.assets.find(asset => asset.price <= marketBefore.user.wallet);
+  assert(tradeAsset, "no affordable market asset in smoke state");
+  const buyMarket = await request("/api/market", {
+    method: "POST",
+    body: { action: "buy", symbol: tradeAsset.symbol, shares: 1 },
+    session: player,
+  });
+  assert(buyMarket.market.assets.find(asset => asset.symbol === tradeAsset.symbol)?.shares === 1, "market buy did not add shares");
+  const sellMarket = await request("/api/market", {
+    method: "POST",
+    body: { action: "sell", symbol: tradeAsset.symbol, shares: 1 },
+    session: player,
+  });
+  assert(sellMarket.market.assets.find(asset => asset.symbol === tradeAsset.symbol)?.shares === 0, "market sell did not remove shares");
+
   const registeredBorrower = await request("/api/register", {
     method: "POST",
     body: { username: borrowerName, password: "pass1234", adminCode: "" },
@@ -245,18 +262,20 @@ try {
     session: borrower,
   });
   assert(postedWork.quest && !postedWork.quest.revealed, "work quest should stay hidden while searching");
-  assert(postedWork.quest.remainingSeconds >= 1, "work quest did not include search delay");
+  assert(!("remainingSeconds" in postedWork.quest), "work quest leaked remaining seconds");
+  assert(!("availableAt" in postedWork.quest), "work quest leaked availability time");
   const duplicateWork = await request("/api/work", {
     method: "POST",
     body: { action: "post" },
     session: borrower,
   });
   assert(duplicateWork.existing, "posting while a quest is active should return existing quest");
-  await expectError(400, "/api/work", {
+  const earlyWork = await expectError(400, "/api/work", {
     method: "POST",
     body: { action: "complete" },
     session: borrower,
   });
+  assert(!("remainingSeconds" in earlyWork.data), "early work error leaked remaining seconds");
   await delay(2300);
   const readyWorkState = await request("/api/state", { session: borrower });
   assert(readyWorkState.activeQuest?.revealed, "work quest was not revealed after waiting");
@@ -306,6 +325,7 @@ try {
     rating: finalState.user.rating,
     winner: m77.winner,
     rouletteResult: roulette.result,
+    marketSymbol: tradeAsset.symbol,
     borrowerWallet: borrowerState.user.wallet,
     borrowerDebt: borrowerState.user.debt,
     workReward: completedWork.reward,
