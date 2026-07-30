@@ -5,6 +5,9 @@ let rouletteBusy = false;
 let serverClockOffsetSeconds = 0;
 let workRefreshQueued = false;
 let lastWorkPollAt = 0;
+let marketDetailSymbol = "";
+let marketDetail = null;
+let marketDetailLoading = false;
 
 const ROULETTE_NUMBERS = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
@@ -27,6 +30,16 @@ function esc(value) {
 
 function log(text) {
   el("log").innerHTML = `${esc(text)}<br>${el("log").innerHTML}`;
+}
+
+function formatDate(seconds) {
+  if (!Number.isFinite(Number(seconds))) return "-";
+  return new Date(Number(seconds) * 1000).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 async function api(path, body = null) {
@@ -86,6 +99,7 @@ function render() {
   renderAdmin();
   renderWorkQuest();
   renderMarket();
+  renderMarketDetail();
   renderClock();
   drawWheel();
 }
@@ -267,6 +281,11 @@ function renderWorkQuest() {
       <b>${esc(quest.title)}</b>
       <span>${esc(quest.difficulty)}</span>
     </div>
+    <p class="questDescription">${esc(quest.description)}</p>
+    <div class="questTask">
+      <b>Task</b>
+      <span>${esc(quest.objective)}</span>
+    </div>
     <div class="questMeta">
       <span>Reward <b>${quest.reward}</b></span>
       <span>Ready</span>
@@ -285,8 +304,8 @@ function maybePollWorkQuest() {
 }
 
 function marketSparkline(history, direction) {
-  const prices = (Array.isArray(history) ? history : [])
-    .map(price => Number(price))
+  const prices = marketHistoryPoints(history)
+    .map(point => point.price)
     .filter(price => Number.isFinite(price));
   if (prices.length === 1) prices.unshift(prices[0]);
   if (!prices.length) prices.push(0, 0);
@@ -303,6 +322,55 @@ function marketSparkline(history, direction) {
   return `
     <svg class="marketChart ${trend}" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
       <polyline points="${points}"></polyline>
+    </svg>
+  `;
+}
+
+function marketHistoryPoints(history) {
+  return (Array.isArray(history) ? history : [])
+    .map((point, index) => {
+      const recordedAt = Number(typeof point === "object" ? point.recordedAt : index);
+      return {
+        price: Number(typeof point === "object" ? point.price : point),
+        recordedAt: Number.isFinite(recordedAt) ? recordedAt : index,
+      };
+    })
+    .filter(point => Number.isFinite(point.price));
+}
+
+function marketDetailChart(asset) {
+  const history = marketHistoryPoints(asset.history);
+  if (history.length === 1) history.unshift({ ...history[0] });
+  if (!history.length) history.push({ price: asset.price, recordedAt: 0 }, { price: asset.price, recordedAt: 1 });
+  const prices = history.map(point => point.price);
+  const min = Math.min(...prices, asset.averagePrice || asset.price);
+  const max = Math.max(...prices, asset.averagePrice || asset.price);
+  const range = Math.max(1, max - min);
+  const firstTime = history[0].recordedAt;
+  const lastTime = history[history.length - 1].recordedAt;
+  const timeRange = Math.max(1, lastTime - firstTime);
+  const pointFor = (price, recordedAt) => ({
+    x: ((recordedAt - firstTime) / timeRange) * 100,
+    y: 68 - ((price - min) / range) * 60,
+  });
+  const points = history.map(point => {
+    const pos = pointFor(point.price, point.recordedAt);
+    return `${pos.x.toFixed(2)},${pos.y.toFixed(2)}`;
+  }).join(" ");
+  const averageY = 68 - (((asset.averagePrice || asset.price) - min) / range) * 60;
+  const markers = (asset.trades || []).map(trade => {
+    const pos = pointFor(trade.price, trade.createdAt || lastTime);
+    const side = trade.side === "sell" ? "sell" : "buy";
+    return `<circle class="${side}" cx="${pos.x.toFixed(2)}" cy="${pos.y.toFixed(2)}" r="1.9"><title>${side} ${trade.shares} at ${trade.price}</title></circle>`;
+  }).join("");
+  const averageLine = asset.shares > 0
+    ? `<line class="average" x1="0" y1="${averageY.toFixed(2)}" x2="100" y2="${averageY.toFixed(2)}"></line>`
+    : "";
+  return `
+    <svg class="marketChart detail ${asset.change > 0 ? "up" : asset.change < 0 ? "down" : "flat"}" viewBox="0 0 100 76" preserveAspectRatio="none" aria-hidden="true">
+      ${averageLine}
+      <polyline points="${points}"></polyline>
+      ${markers}
     </svg>
   `;
 }
@@ -325,23 +393,110 @@ function renderMarket() {
     const direction = asset.change > 0 ? "up" : asset.change < 0 ? "down" : "flat";
     const changeLabel = `${asset.change > 0 ? "+" : ""}${asset.change} (${asset.changePct > 0 ? "+" : ""}${asset.changePct}%)`;
     return `
-      <div class="marketAsset ${direction}">
-        <div>
+      <button type="button" class="marketAsset ${direction}" onclick="openMarketDetail('${esc(asset.symbol)}')">
+        <div class="marketAssetName">
           <b>${esc(asset.symbol)}</b>
           <span>${esc(asset.name)}</span>
         </div>
-        <div class="marketChartBox">${marketSparkline(asset.history, direction)}</div>
-        <div>
+        <div class="marketAssetPrice">
           <strong>${asset.price}</strong>
           <small>${changeLabel}</small>
         </div>
-        <div>
+        <div class="marketChartBox">${marketSparkline(asset.history, direction)}</div>
+        <div class="marketPosition">
           <span>Shares ${asset.shares}</span>
+          <span>Avg ${asset.averagePrice || "-"}</span>
           <span>Value ${asset.value}</span>
         </div>
-      </div>
+      </button>
     `;
   }).join("");
+}
+
+async function openMarketDetail(symbol) {
+  marketDetailSymbol = symbol;
+  marketDetail = null;
+  marketDetailLoading = true;
+  const select = el("marketSymbol");
+  if (select && [...select.options].some(option => option.value === symbol)) select.value = symbol;
+  renderMarketDetail();
+  try {
+    marketDetail = await api(`/api/market/${encodeURIComponent(symbol)}`);
+  } catch (error) {
+    marketDetail = { error: error.message };
+  } finally {
+    marketDetailLoading = false;
+    renderMarketDetail();
+  }
+}
+
+function closeMarketDetail(event) {
+  if (event && event.target !== event.currentTarget) return;
+  marketDetailSymbol = "";
+  marketDetail = null;
+  marketDetailLoading = false;
+  renderMarketDetail();
+}
+
+function renderMarketDetail() {
+  const overlay = el("marketDetailOverlay");
+  const body = el("marketDetailBody");
+  const title = el("marketDetailTitle");
+  if (!overlay || !body || !title) return;
+  overlay.classList.toggle("hidden", !marketDetailSymbol);
+  if (!marketDetailSymbol) return;
+  title.textContent = marketDetailSymbol;
+  if (marketDetailLoading) {
+    body.innerHTML = `<div class="marketDetailEmpty">Loading</div>`;
+    return;
+  }
+  if (marketDetail?.error) {
+    body.innerHTML = `<div class="marketDetailEmpty">${esc(marketDetail.error)}</div>`;
+    return;
+  }
+  const asset = marketDetail?.asset;
+  if (!asset) {
+    body.innerHTML = `<div class="marketDetailEmpty">No data</div>`;
+    return;
+  }
+  const direction = asset.change > 0 ? "up" : asset.change < 0 ? "down" : "flat";
+  const changeLabel = `${asset.change > 0 ? "+" : ""}${asset.change} (${asset.changePct > 0 ? "+" : ""}${asset.changePct}%)`;
+  const trades = (asset.trades || []).map(trade => `
+    <div class="marketTradeRow ${trade.side}">
+      <span>${esc(trade.side.toUpperCase())}</span>
+      <span>${trade.shares} share${trade.shares === 1 ? "" : "s"}</span>
+      <span>@ ${trade.price}</span>
+      <span>${formatDate(trade.createdAt)}</span>
+    </div>
+  `).join("") || `<div class="marketTradeRow empty">No trades</div>`;
+  body.innerHTML = `
+    <div class="marketDetailTop ${direction}">
+      <div>
+        <b>${esc(asset.name)}</b>
+        <span>${asset.symbol}</span>
+      </div>
+      <div>
+        <strong>${asset.price}</strong>
+        <small>${changeLabel}</small>
+      </div>
+    </div>
+    <div class="marketDetailStats">
+      <span>Shares <b>${asset.shares}</b></span>
+      <span>Avg buy <b>${asset.averagePrice || "-"}</b></span>
+      <span>Value <b>${asset.value}</b></span>
+      <span>P/L <b>${asset.profit > 0 ? "+" : ""}${asset.profit}</b></span>
+    </div>
+    <div class="marketDetailChartBox">${marketDetailChart(asset)}</div>
+    <div class="marketDetailRange">
+      <span>${formatDate(asset.history?.[0]?.recordedAt)}</span>
+      <span>All time</span>
+      <span>${formatDate(asset.history?.[asset.history.length - 1]?.recordedAt)}</span>
+    </div>
+    <div class="marketTradeList">
+      <b>Trades</b>
+      ${trades}
+    </div>
+  `;
 }
 
 async function marketAction(action) {
@@ -353,6 +508,7 @@ async function marketAction(action) {
     });
     log(`Market ${action}: ${result.shares} ${result.symbol} for ${result.total}`);
     await loadState();
+    if (marketDetailSymbol === result.symbol) await openMarketDetail(result.symbol);
   } catch (error) {
     alert(error.message);
   }

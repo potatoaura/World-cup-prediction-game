@@ -6,13 +6,55 @@ const ROULETTE_NUMBERS = [
 ];
 
 const WORK_QUEST_POOL = [
-  { title: "Deliver stadium flyers", difficulty: "Easy", reward: 12 },
-  { title: "Clean a snack kiosk", difficulty: "Easy", reward: 16 },
-  { title: "Repair betting terminals", difficulty: "Standard", reward: 34 },
-  { title: "Guard VIP parking", difficulty: "Standard", reward: 42 },
-  { title: "Audit casino receipts", difficulty: "Hard", reward: 78 },
-  { title: "Recover missing sponsor files", difficulty: "Hard", reward: 95 },
-  { title: "Run a private finals event", difficulty: "Elite", reward: 145 },
+  {
+    title: "Deliver stadium flyers",
+    difficulty: "Easy",
+    reward: 12,
+    description: "A small sponsor needs flyers delivered before the next match crowd arrives.",
+    objective: "Visit the fan zone, drop off 30 flyers, and report back to the kiosk manager.",
+  },
+  {
+    title: "Clean a snack kiosk",
+    difficulty: "Easy",
+    reward: 16,
+    description: "A snack stand failed inspection and needs a quick reset before opening.",
+    objective: "Clear the counter, restock cups, wipe the grill, and sign the checklist.",
+  },
+  {
+    title: "Repair betting terminals",
+    difficulty: "Standard",
+    reward: 34,
+    description: "Three terminals are frozen and the betting clerk needs them back online.",
+    objective: "Restart the terminals, test one demo ticket on each, and mark the broken printer.",
+  },
+  {
+    title: "Guard VIP parking",
+    difficulty: "Standard",
+    reward: 42,
+    description: "The VIP lot is crowded and the staff needs help checking incoming cars.",
+    objective: "Check 12 parking passes, redirect fake passes, and keep one emergency lane clear.",
+  },
+  {
+    title: "Audit casino receipts",
+    difficulty: "Hard",
+    reward: 78,
+    description: "The casino desk has missing receipt totals after a busy roulette run.",
+    objective: "Compare the cash drawer with 5 receipt batches and flag any mismatch.",
+  },
+  {
+    title: "Recover missing sponsor files",
+    difficulty: "Hard",
+    reward: 95,
+    description: "A sponsor contract folder vanished during the evening shift.",
+    objective: "Search the office, call the courier, and return the folder to the admin desk.",
+  },
+  {
+    title: "Run a private finals event",
+    difficulty: "Elite",
+    reward: 145,
+    description: "A private watch party needs one person to coordinate staff, food, and entry.",
+    objective: "Confirm the guest list, assign two helpers, settle catering, and close the event report.",
+  },
 ];
 
 const MARKET_ASSETS = [
@@ -35,6 +77,15 @@ const MARKET_ASSETS = [
 
 const MARKET_TICK_SECONDS = 45;
 const MARKET_HISTORY_POINTS = 20;
+
+function initialMarketTickOffset(symbol) {
+  const hash = [...symbol].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
+  return 5 + (hash % Math.max(1, MARKET_TICK_SECONDS - 10));
+}
+
+function randomMarketTickOffset() {
+  return 5 + Math.floor(Math.random() * Math.max(1, MARKET_TICK_SECONDS - 10));
+}
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -212,6 +263,8 @@ export async function onRequest(context) {
       ...base,
       title: quest.title,
       difficulty: quest.difficulty,
+      description: quest.description || "A local business needs a quick job finished.",
+      objective: quest.objective || "Complete the assignment and return for payout.",
       reward: Number(quest.reward),
       completedAt: quest.completed_at === null || quest.completed_at === undefined ? null : Number(quest.completed_at),
     };
@@ -241,9 +294,10 @@ export async function onRequest(context) {
     for (const asset of rows.results) {
       const updatedAt = Number(asset.updated_at || 0);
       const elapsed = now - updatedAt;
-      if (elapsed < MARKET_TICK_SECONDS) continue;
+      const tickOffset = Number(asset.tick_offset || 0);
+      if (elapsed < MARKET_TICK_SECONDS + tickOffset) continue;
 
-      const steps = Math.min(8, Math.floor(elapsed / MARKET_TICK_SECONDS));
+      const steps = Math.min(8, Math.floor((elapsed - tickOffset) / MARKET_TICK_SECONDS));
       let price = Number(asset.price);
       const previousPrice = price;
       for (let index = 0; index < steps; index++) {
@@ -256,9 +310,9 @@ export async function onRequest(context) {
       }
       updates.push(DB.prepare(`
         UPDATE market_assets
-        SET previous_price = ?, price = ?, updated_at = ?
+        SET previous_price = ?, price = ?, updated_at = ?, tick_offset = ?
         WHERE symbol = ?
-      `).bind(previousPrice, price, now, asset.symbol));
+      `).bind(previousPrice, price, now, randomMarketTickOffset(), asset.symbol));
       updates.push(DB.prepare(`
         INSERT INTO market_history (id, symbol, price, recorded_at)
         VALUES (?, ?, ?, ?)
@@ -271,7 +325,7 @@ export async function onRequest(context) {
     await refreshMarketPrices();
     const rows = await DB.prepare(`
       SELECT market_assets.symbol, market_assets.name, market_assets.price,
-        market_assets.previous_price, market_assets.volatility, market_assets.updated_at,
+        market_assets.previous_price, market_assets.volatility, market_assets.updated_at, market_assets.tick_offset,
         COALESCE(market_holdings.shares, 0) AS shares,
         COALESCE(market_holdings.average_price, 0) AS average_price
       FROM market_assets
@@ -282,10 +336,14 @@ export async function onRequest(context) {
     `).bind(userId).all();
     const historyRows = await DB.prepare(`
       SELECT symbol, price, recorded_at
-      FROM market_history
+      FROM (
+        SELECT symbol, price, recorded_at,
+          ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY recorded_at DESC) AS rn
+        FROM market_history
+      )
+      WHERE rn <= ?
       ORDER BY symbol, recorded_at DESC
-      LIMIT 600
-    `).all();
+    `).bind(MARKET_HISTORY_POINTS).all();
     const historyBySymbol = {};
     for (const row of historyRows.results) {
       if (!historyBySymbol[row.symbol]) historyBySymbol[row.symbol] = [];
@@ -308,6 +366,7 @@ export async function onRequest(context) {
         change: price - previousPrice,
         changePct: previousPrice > 0 ? Math.round(((price - previousPrice) / previousPrice) * 1000) / 10 : 0,
         volatility: Number(asset.volatility),
+        nextTickIn: Math.max(0, Number(asset.updated_at || 0) + MARKET_TICK_SECONDS + Number(asset.tick_offset || 0) - nowSeconds()),
         shares,
         averagePrice: Number(asset.average_price || 0),
         value: shares * price,
@@ -317,6 +376,73 @@ export async function onRequest(context) {
     return {
       assets,
       value: assets.reduce((sum, asset) => sum + asset.value, 0),
+    };
+  }
+
+  async function marketAssetDetails(userId, symbol) {
+    await refreshMarketPrices();
+    const asset = await DB.prepare(`
+      SELECT market_assets.symbol, market_assets.name, market_assets.price,
+        market_assets.previous_price, market_assets.volatility, market_assets.updated_at, market_assets.tick_offset,
+        COALESCE(market_holdings.shares, 0) AS shares,
+        COALESCE(market_holdings.average_price, 0) AS average_price
+      FROM market_assets
+      LEFT JOIN market_holdings
+        ON market_holdings.symbol = market_assets.symbol
+        AND market_holdings.user_id = ?
+      WHERE market_assets.symbol = ?
+    `).bind(userId, symbol).first();
+    if (!asset) return null;
+
+    const historyRows = await DB.prepare(`
+      SELECT price, recorded_at
+      FROM market_history
+      WHERE symbol = ?
+      ORDER BY recorded_at ASC
+    `).bind(symbol).all();
+    const tradeRows = await DB.prepare(`
+      SELECT side, shares, price, total, created_at
+      FROM market_trades
+      WHERE user_id = ? AND symbol = ?
+      ORDER BY created_at DESC
+      LIMIT 100
+    `).bind(userId, symbol).all();
+    const price = Number(asset.price);
+    const previousPrice = Number(asset.previous_price || asset.price);
+    const shares = Number(asset.shares || 0);
+    const averagePrice = Number(asset.average_price || 0);
+    let history = historyRows.results.map(row => ({
+      price: Number(row.price),
+      recordedAt: Number(row.recorded_at),
+    }));
+    if (history.length < 2) history.unshift({ price: previousPrice, recordedAt: Number(asset.updated_at || nowSeconds()) });
+    if (history[history.length - 1]?.price !== price) {
+      history.push({ price, recordedAt: Number(asset.updated_at || nowSeconds()) });
+    }
+
+    return {
+      asset: {
+        symbol: asset.symbol,
+        name: asset.name,
+        price,
+        previousPrice,
+        change: price - previousPrice,
+        changePct: previousPrice > 0 ? Math.round(((price - previousPrice) / previousPrice) * 1000) / 10 : 0,
+        volatility: Number(asset.volatility),
+        nextTickIn: Math.max(0, Number(asset.updated_at || 0) + MARKET_TICK_SECONDS + Number(asset.tick_offset || 0) - nowSeconds()),
+        shares,
+        averagePrice,
+        value: shares * price,
+        profit: shares > 0 ? (price - averagePrice) * shares : 0,
+        history,
+        trades: tradeRows.results.map(trade => ({
+          side: trade.side,
+          shares: Number(trade.shares),
+          price: Number(trade.price),
+          total: Number(trade.total),
+          createdAt: Number(trade.created_at),
+        })),
+      },
     };
   }
 
@@ -407,6 +533,8 @@ export async function onRequest(context) {
         user_id: user.id,
         title: selected.title,
         difficulty: selected.difficulty,
+        description: selected.description,
+        objective: selected.objective,
         reward: selected.reward,
         status: "posted",
         created_at: createdAt,
@@ -414,13 +542,15 @@ export async function onRequest(context) {
         completed_at: null,
       };
       await DB.prepare(`
-        INSERT INTO work_quests (id, user_id, title, difficulty, reward, status, available_at, completed_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO work_quests (id, user_id, title, difficulty, description, objective, reward, status, available_at, completed_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         quest.id,
         quest.user_id,
         quest.title,
         quest.difficulty,
+        quest.description,
+        quest.objective,
         quest.reward,
         quest.status,
         quest.available_at,
@@ -472,6 +602,14 @@ export async function onRequest(context) {
     }
 
     return json({ error: "Bad work action" }, 400);
+  }
+
+  if (path.startsWith("/market/") && request.method === "GET") {
+    const symbol = decodeURIComponent(path.slice("/market/".length)).trim().toUpperCase();
+    if (!/^[A-Z0-9]{1,8}$/.test(symbol)) return json({ error: "Bad market symbol" }, 400);
+    const details = await marketAssetDetails(user.id, symbol);
+    if (!details) return json({ error: "Asset not found" }, 404);
+    return json(details);
   }
 
   if (path === "/market" && request.method === "POST") {
@@ -784,6 +922,8 @@ async function ensureRuntimeTables(DB) {
         user_id TEXT NOT NULL,
         title TEXT NOT NULL,
         difficulty TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        objective TEXT NOT NULL DEFAULT '',
         reward INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'posted',
         available_at INTEGER NOT NULL,
@@ -800,6 +940,7 @@ async function ensureRuntimeTables(DB) {
         price INTEGER NOT NULL,
         previous_price INTEGER NOT NULL,
         volatility INTEGER NOT NULL,
+        tick_offset INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL
       )
     `),
@@ -847,5 +988,26 @@ async function ensureRuntimeTables(DB) {
       VALUES (?, ?, ?, ?)
     `).bind(`${asset.symbol}-initial`, asset.symbol, asset.price, now)),
   ]);
+  await ensureTableColumn(DB, "work_quests", "description", "TEXT NOT NULL DEFAULT ''");
+  await ensureTableColumn(DB, "work_quests", "objective", "TEXT NOT NULL DEFAULT ''");
+  await ensureTableColumn(DB, "market_assets", "tick_offset", "INTEGER NOT NULL DEFAULT 0");
+  await DB.batch(MARKET_ASSETS.map(asset => DB.prepare(`
+    UPDATE market_assets
+    SET tick_offset = ?
+    WHERE symbol = ? AND tick_offset = 0
+  `).bind(initialMarketTickOffset(asset.symbol), asset.symbol)));
   runtimeTablesReady = true;
+}
+
+async function ensureTableColumn(DB, table, column, definition) {
+  if (!/^[a-z_]+$/.test(table) || !/^[a-z_]+$/.test(column)) {
+    throw new Error("Bad migration identifier");
+  }
+  const info = await DB.prepare(`PRAGMA table_info(${table})`).all();
+  if (info.results.some(row => row.name === column)) return;
+  try {
+    await DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+  } catch (error) {
+    if (!String(error?.message || "").toLowerCase().includes("duplicate column")) throw error;
+  }
 }

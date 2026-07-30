@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS work_quests (
   user_id TEXT NOT NULL,
   title TEXT NOT NULL,
   difficulty TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  objective TEXT NOT NULL DEFAULT '',
   reward INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'posted',
   available_at INTEGER NOT NULL,
@@ -88,6 +90,7 @@ CREATE TABLE IF NOT EXISTS market_assets (
   price INTEGER NOT NULL,
   previous_price INTEGER NOT NULL,
   volatility INTEGER NOT NULL,
+  tick_offset INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL
 );
 

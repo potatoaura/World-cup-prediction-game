@@ -23,7 +23,7 @@ Environment variable:
 
 First admin: register and enter `ADMIN_CODE` in the optional admin code field.
 
-## v2.6 gameplay state
+## v2.7 gameplay state
 
 The World Cup bracket UI has been removed from the main screen. Match prediction and payout endpoints remain in the API as archived season support.
 
@@ -50,6 +50,7 @@ Loan behavior:
 - Work is now a board flow: post an ad, wait while the offer is hidden, then reveal and collect the quest reward.
 - Production work quest search time is random by default: 2-10 minutes.
 - The client does not receive exact remaining work time while a job is hidden.
+- Revealed work quests now include a description and concrete task objective.
 - Casino actions do not change credit rating.
 
 Casino behavior:
@@ -63,7 +64,8 @@ Market behavior:
 - Players can buy and sell shares from the main screen.
 - Prices are stored in D1 and move roughly every 45 seconds.
 - Market movement is intentionally risky: regular moves lean downward and there is a chance of sharper selloffs.
-- More companies are listed, and every asset card shows a saved price-history chart.
+- Companies update on staggered timers instead of all changing at the same moment.
+- More companies are listed, every asset card shows a saved price-history chart, and clicking a company opens an all-time chart with the player's trade prices.
 - Portfolio value is included in player state.
 
 ## Local development

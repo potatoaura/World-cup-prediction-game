@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prediction Economy v2.6</title>
+<title>Prediction Economy v2.7</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
   <div>
-    <h1>Prediction Economy v2.6</h1>
+    <h1>Prediction Economy v2.7</h1>
     <p>Persistent browser economy</p>
   </div>
   <div id="auth" class="auth">
@@ -89,6 +89,16 @@
       <div class="marketSummary">Portfolio <b id="marketValue">0</b></div>
       <div id="marketAssets" class="marketAssets"></div>
     </section>
+
+    <div id="marketDetailOverlay" class="modalOverlay hidden" onclick="closeMarketDetail(event)">
+      <section class="marketDetail" onclick="event.stopPropagation()">
+        <div class="head">
+          <h2 id="marketDetailTitle">Market</h2>
+          <button class="secondary" onclick="closeMarketDetail()">Close</button>
+        </div>
+        <div id="marketDetailBody"></div>
+      </section>
+    </div>
 
     <section class="panel">
       <h2>Slot</h2>

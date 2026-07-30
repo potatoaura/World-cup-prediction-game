@@ -230,12 +230,19 @@ try {
   );
   const tradeAsset = marketBefore.market.assets.find(asset => asset.price <= marketBefore.user.wallet);
   assert(tradeAsset, "no affordable market asset in smoke state");
+  const marketDetailBefore = await request(`/api/market/${tradeAsset.symbol}`, { session: player });
+  assert(marketDetailBefore.asset?.symbol === tradeAsset.symbol, "market detail returned wrong asset");
+  assert(marketDetailBefore.asset.history.length >= 2, "market detail history missing");
   const buyMarket = await request("/api/market", {
     method: "POST",
     body: { action: "buy", symbol: tradeAsset.symbol, shares: 1 },
     session: player,
   });
   assert(buyMarket.market.assets.find(asset => asset.symbol === tradeAsset.symbol)?.shares === 1, "market buy did not add shares");
+  const marketDetailAfterBuy = await request(`/api/market/${tradeAsset.symbol}`, { session: player });
+  assert(marketDetailAfterBuy.asset.shares === 1, "market detail did not include owned shares");
+  assert(marketDetailAfterBuy.asset.averagePrice > 0, "market detail did not include average buy price");
+  assert(marketDetailAfterBuy.asset.trades.some(trade => trade.side === "buy" && trade.price > 0), "market detail did not include buy trade");
   const sellMarket = await request("/api/market", {
     method: "POST",
     body: { action: "sell", symbol: tradeAsset.symbol, shares: 1 },
@@ -268,6 +275,8 @@ try {
   assert(postedWork.quest && !postedWork.quest.revealed, "work quest should stay hidden while searching");
   assert(!("remainingSeconds" in postedWork.quest), "work quest leaked remaining seconds");
   assert(!("availableAt" in postedWork.quest), "work quest leaked availability time");
+  assert(!("description" in postedWork.quest), "hidden work quest leaked description");
+  assert(!("objective" in postedWork.quest), "hidden work quest leaked objective");
   const duplicateWork = await request("/api/work", {
     method: "POST",
     body: { action: "post" },
@@ -284,6 +293,8 @@ try {
   const readyWorkState = await request("/api/state", { session: borrower });
   assert(readyWorkState.activeQuest?.revealed, "work quest was not revealed after waiting");
   assert(readyWorkState.activeQuest.reward > 0, "revealed work quest did not include reward");
+  assert(readyWorkState.activeQuest.description, "revealed work quest did not include description");
+  assert(readyWorkState.activeQuest.objective, "revealed work quest did not include objective");
   const completedWork = await request("/api/work", {
     method: "POST",
     body: { action: "complete" },
