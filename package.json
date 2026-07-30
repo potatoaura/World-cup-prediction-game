@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler pages dev public --d1 DB=worldcup_db"
+    "dev": "wrangler pages dev public --d1 DB=worldcup_db --compatibility-date=2026-07-07",
+    "db:schema": "wrangler d1 execute worldcup_db --local --config wrangler.local.toml --file schema.sql",
+    "db:seed": "wrangler d1 execute worldcup_db --local --config wrangler.local.toml --file seed.sql",
+    "db:setup": "npm run db:schema && npm run db:seed",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "wrangler": "latest"

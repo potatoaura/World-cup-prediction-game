@@ -1,24 +1,291 @@
-let STATE=null,wheelRotation=0,ballRotation=0;
-const FALLBACK_MATCHES = [{"id": "M73", "stage": "Round of 32", "sort_order": 1, "label": "South Africa 0-1 Canada", "teams": ["South Africa", "Canada"], "winner": "Canada", "points": 5, "odds": 1.5, "closed": true}, {"id": "M75", "stage": "Round of 32", "sort_order": 2, "label": "Netherlands 1-1 Morocco", "teams": ["Netherlands", "Morocco"], "winner": "Morocco", "points": 5, "odds": 1.5, "closed": true}, {"id": "M74", "stage": "Round of 32", "sort_order": 3, "label": "Germany 1-1 Paraguay", "teams": ["Germany", "Paraguay"], "winner": "Paraguay", "points": 5, "odds": 1.5, "closed": true}, {"id": "M77", "stage": "Round of 32", "sort_order": 4, "label": "France vs Sweden", "teams": ["France", "Sweden"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M76", "stage": "Round of 32", "sort_order": 5, "label": "Brazil 2-1 Japan", "teams": ["Brazil", "Japan"], "winner": "Brazil", "points": 5, "odds": 1.5, "closed": true}, {"id": "M78", "stage": "Round of 32", "sort_order": 6, "label": "Ivory Coast vs Norway", "teams": ["Ivory Coast", "Norway"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M79", "stage": "Round of 32", "sort_order": 7, "label": "Mexico vs Ecuador", "teams": ["Mexico", "Ecuador"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M80", "stage": "Round of 32", "sort_order": 8, "label": "England vs DR Congo", "teams": ["England", "DR Congo"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M85", "stage": "Round of 32", "sort_order": 9, "label": "USA vs Bosnia and Herzegovina", "teams": ["USA", "Bosnia and Herzegovina"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M87", "stage": "Round of 32", "sort_order": 10, "label": "Belgium vs Senegal", "teams": ["Belgium", "Senegal"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M86", "stage": "Round of 32", "sort_order": 11, "label": "Portugal vs Croatia", "teams": ["Portugal", "Croatia"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M88", "stage": "Round of 32", "sort_order": 12, "label": "Spain vs Austria", "teams": ["Spain", "Austria"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M81", "stage": "Round of 32", "sort_order": 13, "label": "Argentina vs Cape Verde", "teams": ["Argentina", "Cape Verde"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M82", "stage": "Round of 32", "sort_order": 14, "label": "Australia vs Egypt", "teams": ["Australia", "Egypt"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M83", "stage": "Round of 32", "sort_order": 15, "label": "Switzerland vs Algeria", "teams": ["Switzerland", "Algeria"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M84", "stage": "Round of 32", "sort_order": 16, "label": "Colombia vs Ghana", "teams": ["Colombia", "Ghana"], "winner": "", "points": 5, "odds": 1.5, "closed": false}, {"id": "M89", "stage": "Round of 16", "sort_order": 17, "label": "Canada vs Morocco", "teams": ["Canada", "Morocco"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M90", "stage": "Round of 16", "sort_order": 18, "label": "Paraguay vs Winner M77", "teams": ["Paraguay", "France", "Sweden"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M91", "stage": "Round of 16", "sort_order": 19, "label": "Brazil vs Winner M78", "teams": ["Brazil", "Ivory Coast", "Norway"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M92", "stage": "Round of 16", "sort_order": 20, "label": "Winner M79 vs Winner M80", "teams": ["Mexico", "Ecuador", "England", "DR Congo"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M96", "stage": "Round of 16", "sort_order": 21, "label": "Winner M85 vs Winner M87", "teams": ["USA", "Bosnia and Herzegovina", "Belgium", "Senegal"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M95", "stage": "Round of 16", "sort_order": 22, "label": "Winner M86 vs Winner M88", "teams": ["Portugal", "Croatia", "Spain", "Austria"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M93", "stage": "Round of 16", "sort_order": 23, "label": "Winner M81 vs Winner M82", "teams": ["Argentina", "Cape Verde", "Australia", "Egypt"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M94", "stage": "Round of 16", "sort_order": 24, "label": "Winner M83 vs Winner M84", "teams": ["Switzerland", "Algeria", "Colombia", "Ghana"], "winner": "", "points": 10, "odds": 1.8, "closed": false}, {"id": "M97", "stage": "Quarterfinal", "sort_order": 25, "label": "Winner M89 vs Winner M90", "teams": ["Canada", "Morocco", "Paraguay", "France", "Sweden"], "winner": "", "points": 20, "odds": 2.2, "closed": false}, {"id": "M99", "stage": "Quarterfinal", "sort_order": 26, "label": "Winner M91 vs Winner M92", "teams": ["Brazil", "Ivory Coast", "Norway", "Mexico", "Ecuador", "England", "DR Congo"], "winner": "", "points": 20, "odds": 2.2, "closed": false}, {"id": "M100", "stage": "Quarterfinal", "sort_order": 27, "label": "Winner M96 vs Winner M95", "teams": ["USA", "Bosnia and Herzegovina", "Belgium", "Senegal", "Portugal", "Croatia", "Spain", "Austria"], "winner": "", "points": 20, "odds": 2.2, "closed": false}, {"id": "M98", "stage": "Quarterfinal", "sort_order": 28, "label": "Winner M93 vs Winner M94", "teams": ["Argentina", "Cape Verde", "Australia", "Egypt", "Switzerland", "Algeria", "Colombia", "Ghana"], "winner": "", "points": 20, "odds": 2.2, "closed": false}, {"id": "M101", "stage": "Semifinal", "sort_order": 29, "label": "Winner M97 vs Winner M100", "teams": ["Canada", "Morocco", "Paraguay", "France", "Sweden", "USA", "Bosnia and Herzegovina", "Belgium", "Senegal", "Portugal", "Croatia", "Spain", "Austria"], "winner": "", "points": 35, "odds": 3, "closed": false}, {"id": "M102", "stage": "Semifinal", "sort_order": 30, "label": "Winner M99 vs Winner M98", "teams": ["Brazil", "Ivory Coast", "Norway", "Mexico", "Ecuador", "England", "DR Congo", "Argentina", "Cape Verde", "Australia", "Egypt", "Switzerland", "Algeria", "Colombia", "Ghana"], "winner": "", "points": 35, "odds": 3, "closed": false}, {"id": "M104", "stage": "Final", "sort_order": 31, "label": "Final", "teams": ["Canada", "Morocco", "Paraguay", "France", "Sweden", "Brazil", "Ivory Coast", "Norway", "Mexico", "Ecuador", "England", "DR Congo", "USA", "Bosnia and Herzegovina", "Belgium", "Senegal", "Portugal", "Croatia", "Spain", "Austria", "Argentina", "Cape Verde", "Australia", "Egypt", "Switzerland", "Algeria", "Colombia", "Ghana"], "winner": "", "points": 60, "odds": 5, "closed": false}];
-function el(id){return document.getElementById(id)}
-function log(t){el("log").innerHTML=t+"<br>"+el("log").innerHTML}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
-async function api(path,body=null){const opt=body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{};const r=await fetch(path,opt);const data=await r.json().catch(()=>({error:"Bad response"}));if(!r.ok)throw new Error(data.error||"Request failed");return data}
-async function loadState(){try{STATE=await api("/api/state");hideError();}catch(e){STATE={user:null,admin:false,matches:FALLBACK_MATCHES,leaderboard:[]};showError("API/base error: "+e.message+". Bracket shown offline; login/bets need D1 binding.");}render()}
-function showError(t){el("errorBox").textContent=t;el("errorBox").classList.remove("hidden")}function hideError(){el("errorBox").classList.add("hidden")}
-function render(){const u=STATE.user;el("auth").classList.toggle("hidden",!!u);el("me").classList.toggle("hidden",!u);el("stats").classList.toggle("hidden",!u);el("adminPanel").classList.toggle("hidden",!(u&&u.isAdmin));if(u){["wallet","bank","debt","rating","score"].forEach(k=>el(k).textContent=u[k]);el("meName").textContent=u.username+(u.isAdmin?" (admin)":"")}renderBracket();renderLeaderboard();renderAdmin();drawWheel()}
-function grouped(){const stages=["Round of 32","Round of 16","Quarterfinal","Semifinal","Final"];return stages.map(s=>[s,STATE.matches.filter(m=>m.stage===s).sort((a,b)=>a.sort_order-b.sort_order)])}
-function renderBracket(){const box=el("bracket");box.innerHTML="";for(const [stage,list] of grouped()){let html=`<div class="stage"><div class="stageTitle">${stage}</div>`;for(const m of list){const opts=['<option value="">choose</option>'].concat(m.teams.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`)).join("");const dis=m.closed?"disabled":"";html+=`<div class="match ${m.closed?"closed":""}"><div class="id">${m.id} · ${m.points} pts · x${m.odds}</div><div class="label">${esc(m.label)}</div>${m.winner?`<div class="muted">Winner: ${esc(m.winner)}</div>`:""}<select id="pred_${m.id}" ${dis}>${opts}</select><div class="row"><button onclick="predict('${m.id}')" ${dis}>Predict</button><input id="bet_${m.id}" type="number" value="10" min="1" ${dis}><button onclick="bet('${m.id}')" ${dis}>Bet</button></div></div>`}html+="</div>";box.innerHTML+=html}}
-function renderLeaderboard(){const box=el("leaderboard");box.innerHTML=`<div class="leaderRow"><b>#</b><b>User</b><b>Total</b><b>Score</b></div>`;STATE.leaderboard.forEach((u,i)=>box.innerHTML+=`<div class="leaderRow"><span>${i+1}</span><span>${esc(u.username)}</span><span>${u.wallet+u.bank}</span><span>${u.score}</span></div>`)}
-function renderAdmin(){if(!STATE.admin)return;const box=el("adminList");box.innerHTML="";for(const m of STATE.matches){const opts=m.teams.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");box.innerHTML+=`<div class="adminRow"><b>${m.id}</b><select id="admin_${m.id}">${opts}</select><button onclick="setWinner('${m.id}')">Set</button></div>`}}
-async function register(){try{await api("/api/register",{username:el("username").value,password:el("password").value,adminCode:el("adminCode").value});await loadState()}catch(e){alert(e.message)}}
-async function login(){try{await api("/api/login",{username:el("username").value,password:el("password").value});await loadState()}catch(e){alert(e.message)}}
-async function logout(){try{await api("/api/logout");await loadState()}catch(e){alert(e.message)}}
-async function predict(matchId){try{await api("/api/predict",{matchId,team:el("pred_"+matchId).value});log("Prediction saved: "+matchId);await loadState()}catch(e){alert(e.message)}}
-async function bet(matchId){try{await api("/api/bet",{matchId,team:el("pred_"+matchId).value,amount:Number(el("bet_"+matchId).value)});log("Bet placed: "+matchId);await loadState()}catch(e){alert(e.message)}}
-async function bankAction(action){try{await api("/api/bank",{action,amount:Number(el("bankAmount").value)});log("Bank: "+action);await loadState()}catch(e){alert(e.message)}}
-async function slot(){try{const amount=Number(el("slotAmount").value);const reels=[el("reel1"),el("reel2"),el("reel3")];reels.forEach(r=>r.classList.add("spin"));const r=await api("/api/casino/slot",{amount});setTimeout(()=>{reels[0].textContent=r.reels[0];reels[1].textContent=r.reels[1];reels[2].textContent=r.reels[2];reels.forEach(x=>x.classList.remove("spin"));el("slotMsg").textContent=r.label+": "+(r.win?"WIN +"+r.win:"LOSE -"+amount);loadState()},1400)}catch(e){alert(e.message)}}
-async function roulette(){try{const amount=Number(el("rouletteAmount").value),number=Number(el("rouletteNumber").value);const r=await api("/api/casino/roulette",{amount,number});wheelRotation+=1800+r.result*(360/37);ballRotation-=2100+r.result*(360/37);el("wheel").style.transform=`rotate(${wheelRotation}deg)`;el("ball").style.transform=`rotate(${ballRotation}deg)`;setTimeout(()=>{el("rouletteMsg").textContent=r.win?`Result ${r.result}. WIN +${r.win}`:`Result ${r.result}. Lose -${amount}`;loadState()},4000)}catch(e){alert(e.message)}}
-async function setWinner(matchId){try{await api("/api/admin/setWinner",{matchId,winner:el("admin_"+matchId).value});log("Winner set: "+matchId);await loadState()}catch(e){alert(e.message)}}
-function drawWheel(){const canvas=el("wheel");if(!canvas)return;const ctx=canvas.getContext("2d"),cx=120,cy=120,r=110;ctx.clearRect(0,0,240,240);for(let i=0;i<37;i++){ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,i*Math.PI*2/37,(i+1)*Math.PI*2/37);ctx.closePath();ctx.fillStyle=i===0?"#166534":(i%2?"#991b1b":"#111827");ctx.fill();ctx.save();ctx.translate(cx,cy);ctx.rotate((i+.5)*Math.PI*2/37);ctx.fillStyle="white";ctx.font="10px Arial";ctx.fillText(String(i),78,3);ctx.restore()}ctx.beginPath();ctx.arc(cx,cy,22,0,Math.PI*2);ctx.fillStyle="#f2d36b";ctx.fill()}
+let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [] };
+let wheelRotation = 0;
+let ballRotation = 0;
+
+const ROULETTE_NUMBERS = [
+  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
+  5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
+];
+
+function el(id) {
+  return document.getElementById(id);
+}
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char]);
+}
+
+function log(text) {
+  el("log").innerHTML = `${esc(text)}<br>${el("log").innerHTML}`;
+}
+
+async function api(path, body = null) {
+  const options = body ? {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  } : {};
+  const response = await fetch(path, options);
+  const data = await response.json().catch(() => ({ error: "Bad response" }));
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+async function loadState() {
+  try {
+    STATE = await api("/api/state");
+    hideError();
+  } catch (error) {
+    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [] };
+    showError(`API error: ${error.message}`);
+  }
+  render();
+}
+
+function showError(text) {
+  el("errorBox").textContent = text;
+  el("errorBox").classList.remove("hidden");
+}
+
+function hideError() {
+  el("errorBox").classList.add("hidden");
+}
+
+function render() {
+  const user = STATE.user;
+  el("auth").classList.toggle("hidden", !!user);
+  el("me").classList.toggle("hidden", !user);
+  el("stats").classList.toggle("hidden", !user);
+  el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
+
+  if (user) {
+    for (const key of ["wallet", "bank", "debt", "rating", "score", "day"]) {
+      el(key).textContent = user[key];
+    }
+    el("loanDue").textContent = user.loanDue ?? "-";
+    el("meName").textContent = `${user.username}${user.isAdmin ? " (admin)" : ""}${user.banned ? " (banned)" : ""}`;
+  }
+
+  renderLeaderboard();
+  renderAdmin();
+  drawWheel();
+}
+
+function renderLeaderboard() {
+  const box = el("leaderboard");
+  box.innerHTML = '<div class="leaderRow"><b>#</b><b>User</b><b>Total</b><b>Score</b></div>';
+  for (const [index, user] of (STATE.leaderboard || []).entries()) {
+    box.innerHTML += `<div class="leaderRow"><span>${index + 1}</span><span>${esc(user.username)}</span><span>${user.wallet + user.bank}</span><span>${user.score}</span></div>`;
+  }
+}
+
+function renderAdmin() {
+  if (!STATE.admin) return;
+  const box = el("adminUsers");
+  const users = STATE.adminUsers || [];
+  box.innerHTML = users.map(user => `
+    <div class="adminUser ${user.banned ? "isBanned" : ""}">
+      <div>
+        <b>${esc(user.username)}${user.isAdmin ? " admin" : ""}</b>
+        <span>W ${user.wallet} | B ${user.bank} | D ${user.debt} | R ${user.rating}</span>
+        ${user.banned ? `<small>Banned: ${esc(user.banReason || "no reason")}</small>` : ""}
+      </div>
+      <div class="adminActions">
+        <button onclick="adminUserAction('${user.id}','addWallet')">+Wallet</button>
+        <button onclick="adminUserAction('${user.id}','addBank')">+Bank</button>
+        <button class="secondary" onclick="adminUserAction('${user.id}','takeWallet')">-Wallet</button>
+        <button class="secondary" onclick="adminUserAction('${user.id}','clearDebt')">Clear debt</button>
+        <button class="danger" onclick="adminUserAction('${user.id}','ban')" ${user.isAdmin ? "disabled" : ""}>Ban</button>
+        <button class="secondary" onclick="adminUserAction('${user.id}','unban')">Unban</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function register() {
+  try {
+    await api("/api/register", {
+      username: el("username").value,
+      password: el("password").value,
+      adminCode: el("adminCode").value,
+    });
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function login() {
+  try {
+    await api("/api/login", {
+      username: el("username").value,
+      password: el("password").value,
+    });
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function logout() {
+  try {
+    await api("/api/logout");
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function bankAction(action) {
+  try {
+    const result = await api("/api/bank", {
+      action,
+      amount: Number(el("bankAmount").value),
+    });
+    log(action === "work" ? `Work earned ${result.earned}` : `Bank: ${action}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function slot() {
+  try {
+    const amount = Number(el("slotAmount").value);
+    const reels = [el("reel1"), el("reel2"), el("reel3")];
+    reels.forEach(reel => reel.classList.add("spin"));
+    const result = await api("/api/casino/slot", { amount });
+    setTimeout(async () => {
+      reels.forEach((reel, index) => {
+        reel.textContent = result.reels[index];
+        reel.classList.remove("spin");
+      });
+      el("slotMsg").textContent = result.win ? `${result.label}: +${result.win}` : `LOSS: -${amount}`;
+      await loadState();
+    }, 1200);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function roulette() {
+  try {
+    const amount = Number(el("rouletteAmount").value);
+    const number = Number(el("rouletteNumber").value);
+    const result = await api("/api/casino/roulette", { amount, number });
+    animateRoulette(result.result);
+    el("rouletteMsg").textContent = "Spinning";
+    setTimeout(async () => {
+      el("rouletteMsg").textContent = result.win ? `Result ${result.result}: +${result.win}` : `Result ${result.result}: -${amount}`;
+      await loadState();
+    }, 4600);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function positiveMod(value, size) {
+  return ((value % size) + size) % size;
+}
+
+function rouletteAngle(number) {
+  const slotIndex = ROULETTE_NUMBERS.indexOf(number);
+  return (slotIndex + 0.5) * (360 / ROULETTE_NUMBERS.length);
+}
+
+function animateRoulette(resultNumber) {
+  const wheel = el("wheel");
+  const ballOrbit = el("ballOrbit");
+  const sector = 360 / ROULETTE_NUMBERS.length;
+  wheelRotation -= 1080 + sector * 5;
+  const targetBall = rouletteAngle(resultNumber) + positiveMod(wheelRotation, 360) + 90;
+  ballRotation += 1800 + positiveMod(targetBall - positiveMod(ballRotation, 360), 360);
+  wheel.style.transform = `rotate(${wheelRotation}deg)`;
+  ballOrbit.style.transform = `rotate(${ballRotation}deg)`;
+}
+
+async function adminUserAction(userId, action) {
+  try {
+    await api("/api/admin/userAction", {
+      userId,
+      action,
+      amount: Number(el("adminAmount").value),
+      reason: el("adminReason").value,
+    });
+    log(`Admin: ${action}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function drawWheel() {
+  const canvas = el("wheel");
+  if (!canvas) return;
+  const size = Math.round(canvas.getBoundingClientRect().width || 320);
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== size * dpr || canvas.height !== size * dpr) {
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+  }
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+
+  const center = size / 2;
+  const outer = 152;
+  const inner = 48;
+  const sector = Math.PI * 2 / ROULETTE_NUMBERS.length;
+
+  ctx.beginPath();
+  ctx.arc(center, center, outer + 6, 0, Math.PI * 2);
+  ctx.fillStyle = "#c9a84d";
+  ctx.fill();
+
+  for (let index = 0; index < ROULETTE_NUMBERS.length; index++) {
+    const number = ROULETTE_NUMBERS[index];
+    const start = index * sector;
+    const end = start + sector;
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.arc(center, center, outer, start, end);
+    ctx.closePath();
+    ctx.fillStyle = number === 0 ? "#0d7a43" : index % 2 ? "#9f2434" : "#191c22";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.24)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(center, center);
+    ctx.rotate(start + sector / 2);
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "700 12px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(number), 116, 0);
+    ctx.restore();
+  }
+
+  ctx.beginPath();
+  ctx.arc(center, center, inner, 0, Math.PI * 2);
+  ctx.fillStyle = "#222833";
+  ctx.fill();
+  ctx.strokeStyle = "#c9a84d";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(center, center, 18, 0, Math.PI * 2);
+  ctx.fillStyle = "#d8b85a";
+  ctx.fill();
+}
+
 loadState();

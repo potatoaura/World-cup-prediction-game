@@ -52,3 +52,27 @@ CREATE TABLE IF NOT EXISTS bets (
   payout INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS bans (
+  user_id TEXT PRIMARY KEY,
+  admin_id TEXT,
+  reason TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS admin_logs (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  target_user_id TEXT,
+  action TEXT NOT NULL,
+  amount INTEGER NOT NULL DEFAULT 0,
+  reason TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_match_id ON predictions(match_id);
+CREATE INDEX IF NOT EXISTS idx_bets_match_status ON bets(match_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_user_match ON bets(user_id, match_id);
+CREATE INDEX IF NOT EXISTS idx_bans_admin_id ON bans(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_logs_target_user_id ON admin_logs(target_user_id);
