@@ -83,6 +83,7 @@ function render() {
   el("me").classList.toggle("hidden", !user);
   el("stats").classList.toggle("hidden", !user);
   el("timeWidget").classList.toggle("hidden", !user);
+  el("lifePanel").classList.toggle("hidden", !user);
   el("workPanel").classList.toggle("hidden", !user);
   el("marketPanel").classList.toggle("hidden", !user);
   el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
@@ -91,12 +92,16 @@ function render() {
     for (const key of ["wallet", "bank", "debt", "rating", "score", "day"]) {
       el(key).textContent = user[key];
     }
+    el("hunger").textContent = user.life?.hunger ?? 100;
+    el("food").textContent = user.life?.food ?? 0;
+    el("rentDue").textContent = user.life?.rentDue ?? 0;
     el("loanDue").textContent = user.loanDue ?? "-";
     el("meName").textContent = `${user.username}${user.isAdmin ? " (admin)" : ""}${user.banned ? " (banned)" : ""}`;
   }
 
   renderLeaderboard();
   renderAdmin();
+  renderLife();
   renderWorkQuest();
   renderMarket();
   renderMarketDetail();
@@ -182,6 +187,17 @@ async function bankAction(action) {
   }
 }
 
+async function lifeAction(action) {
+  try {
+    const amount = action === "payRent" ? Number(el("rentAmount").value) : Number(el("foodAmount").value);
+    await api("/api/life", { action, amount });
+    log(`Life: ${action}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
 function currentServerSecond() {
   return Math.floor(Date.now() / 1000) + serverClockOffsetSeconds;
 }
@@ -215,6 +231,12 @@ function renderClock() {
   el("clockLoan").textContent = STATE.user.loanDue === null || STATE.user.loanDue === undefined
     ? "No loan due"
     : `Loan due day ${STATE.user.loanDue}`;
+  const life = STATE.user.life || {};
+  const hunger = Number(life.hunger ?? 100);
+  const rentDue = Number(life.rentDue ?? 0);
+  el("clockLife").textContent = rentDue > 0
+    ? `Rent due ${rentDue}`
+    : hunger < 25 ? "Hungry" : "Life stable";
 
   const quest = STATE.activeQuest;
   if (!quest) {
@@ -226,6 +248,31 @@ function renderClock() {
     return;
   }
   el("clockQuest").textContent = "Work ready";
+}
+
+function renderLife() {
+  if (!STATE.user || !el("lifePanel")) return;
+  const life = STATE.user.life || {};
+  const hunger = Number(life.hunger ?? 100);
+  const food = Number(life.food ?? 0);
+  const rentDue = Number(life.rentDue ?? 0);
+  const foodPrice = Number(life.foodPrice ?? 18);
+  const rentPerDay = Number(life.rentPerDay ?? 22);
+  el("lifeHunger").textContent = hunger;
+  el("lifeHungerBar").style.width = `${Math.max(0, Math.min(100, hunger))}%`;
+  el("lifeFood").textContent = food;
+  el("lifeFoodPrice").textContent = `${foodPrice} each`;
+  el("lifeHousing").textContent = life.housing || "Room";
+  el("lifeRentPerDay").textContent = rentPerDay;
+  el("lifeRentDue").textContent = rentDue;
+  el("lifeRentStatus").textContent = rentDue > 0 ? "Unpaid" : "Paid";
+  const hungerText = hunger <= 0 ? "Eat before work." : hunger < 25 ? "Low hunger." : "Food restores hunger.";
+  el("lifeHint").textContent = rentDue >= 100
+    ? `${hungerText} Rent is overdue and can hurt rating.`
+    : `${hungerText} Rent grows each day.`;
+  if (rentDue > 0 && Number(el("rentAmount").value) === 22) {
+    el("rentAmount").value = rentDue;
+  }
 }
 
 function renderWorkQuest() {
@@ -564,14 +611,14 @@ async function roulette() {
     const result = await api("/api/casino/roulette", { amount, number });
     startRouletteCamera();
     animateRoulette(result.result);
-    el("rouletteMsg").textContent = "Camera rolling";
+    el("rouletteMsg").textContent = "Spinning";
     setTimeout(async () => {
       el("rouletteMsg").textContent = result.win ? `Result ${result.result}: +${result.win}` : `Result ${result.result}: -${amount}`;
       settleRouletteCamera();
       await loadState();
       rouletteBusy = false;
       if (button) button.disabled = false;
-    }, 5400);
+    }, 4200);
   } catch (error) {
     settleRouletteCamera();
     rouletteBusy = false;
@@ -606,10 +653,6 @@ function startRouletteCamera() {
   if (!camera || !ball) return;
   camera.classList.remove("settled", "cinematic");
   ball.classList.remove("ballBounce");
-  void camera.offsetWidth;
-  void ball.offsetWidth;
-  camera.classList.add("cinematic");
-  ball.classList.add("ballBounce");
 }
 
 function settleRouletteCamera() {
@@ -617,7 +660,7 @@ function settleRouletteCamera() {
   const ball = el("ball");
   if (!camera || !ball) return;
   camera.classList.remove("cinematic");
-  camera.classList.add("settled");
+  camera.classList.remove("settled");
   ball.classList.remove("ballBounce");
 }
 

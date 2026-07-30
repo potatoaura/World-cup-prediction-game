@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prediction Economy v2.7</title>
+<title>Prediction Economy v2.8</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
   <div>
-    <h1>Prediction Economy v2.7</h1>
+    <h1>Prediction Economy v2.8</h1>
     <p>Persistent browser economy</p>
   </div>
   <div id="auth" class="auth">
@@ -34,6 +34,9 @@
   <div>Rating <b id="rating">700</b></div>
   <div>Score <b id="score">0</b></div>
   <div>Day <b id="day">0</b></div>
+  <div>Hunger <b id="hunger">100</b></div>
+  <div>Food <b id="food">1</b></div>
+  <div>Rent <b id="rentDue">0</b></div>
   <div>Loan due <b id="loanDue">-</b></div>
 </section>
 
@@ -45,6 +48,7 @@
   <div class="clockChips">
     <span id="clockDay">Day 0</span>
     <span id="clockLoan">No loan due</span>
+    <span id="clockLife">Fed</span>
     <span id="clockQuest">No work quest</span>
   </div>
 </section>
@@ -64,6 +68,45 @@
         <button onclick="bankAction('repay')">Repay</button>
         <button class="secondary" onclick="bankAction('nextDay')">Next day</button>
       </div>
+    </section>
+
+    <section id="lifePanel" class="panel lifePanel hidden">
+      <div class="head">
+        <h2>Life</h2>
+        <button class="secondary" onclick="loadState()">Refresh</button>
+      </div>
+      <div class="lifeCards">
+        <div class="lifeCard">
+          <span>Hunger</span>
+          <b id="lifeHunger">100</b>
+          <i><em id="lifeHungerBar"></em></i>
+        </div>
+        <div class="lifeCard">
+          <span>Food storage</span>
+          <b id="lifeFood">1</b>
+          <small id="lifeFoodPrice">18 each</small>
+        </div>
+        <div class="lifeCard">
+          <span>Housing</span>
+          <b id="lifeHousing">Room</b>
+          <small>Rent +<span id="lifeRentPerDay">22</span>/day</small>
+        </div>
+        <div class="lifeCard due">
+          <span>Rent due</span>
+          <b id="lifeRentDue">0</b>
+          <small id="lifeRentStatus">Paid</small>
+        </div>
+      </div>
+      <div class="inlineControls lifeControls">
+        <input id="foodAmount" type="number" value="1" min="1">
+        <button onclick="lifeAction('buyFood')">Buy food</button>
+        <button class="secondary" onclick="lifeAction('eatFood')">Eat</button>
+      </div>
+      <div class="inlineControls lifeControls">
+        <input id="rentAmount" type="number" value="22" min="1">
+        <button onclick="lifeAction('payRent')">Pay rent</button>
+      </div>
+      <p id="lifeHint" class="muted">Food restores hunger. Rent grows each day.</p>
     </section>
 
     <section id="workPanel" class="panel workPanel hidden">

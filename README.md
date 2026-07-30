@@ -23,14 +23,14 @@ Environment variable:
 
 First admin: register and enter `ADMIN_CODE` in the optional admin code field.
 
-## v2.7 gameplay state
+## v2.8 gameplay state
 
 The World Cup bracket UI has been removed from the main screen. Match prediction and payout endpoints remain in the API as archived season support.
 
 Current main systems:
 
 - Accounts and sessions
-- Wallet, bank, debt, rating, and timed work quests
+- Wallet, bank, debt, rating, life needs, rent, and timed work quests
 - Slot and roulette casino games
 - Basic market trading
 - Leaderboard
@@ -53,11 +53,19 @@ Loan behavior:
 - Revealed work quests now include a description and concrete task objective.
 - Casino actions do not change credit rating.
 
+Life behavior:
+
+- Players have hunger, food storage, housing, and rent due.
+- Food can be bought with wallet money and eaten to restore hunger.
+- Advancing to the next day lowers hunger and adds rent due.
+- Zero hunger blocks work quest completion.
+- Overdue rent and starvation can reduce credit rating over time.
+
 Casino behavior:
 
 - Slot jackpot chance is 0.1%.
 - Slot any-win chance is 2%.
-- Roulette uses a European wheel order. The server result drives the ball stop position and the UI uses the previous stable zoom-and-ball-hop animation.
+- Roulette uses a European wheel order. The server result drives the ball stop position and the UI uses the original simple spin-only animation.
 
 Market behavior:
 

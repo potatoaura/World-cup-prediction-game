@@ -77,6 +77,11 @@ const MARKET_ASSETS = [
 
 const MARKET_TICK_SECONDS = 45;
 const MARKET_HISTORY_POINTS = 20;
+const FOOD_PRICE = 18;
+const FOOD_HUNGER = 35;
+const HUNGER_DECAY_PER_DAY = 18;
+const RENT_PER_DAY = 22;
+const RENT_WARNING_DUE = 100;
 
 function initialMarketTickOffset(symbol) {
   const hash = [...symbol].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
@@ -159,6 +164,15 @@ export async function onRequest(context) {
       day: user.day,
       loanDue: user.loan_due,
       score: user.score,
+      life: {
+        hunger: Number(user.hunger ?? 100),
+        food: Number(user.food ?? 0),
+        rentDue: Number(user.rent_due ?? 0),
+        housing: user.housing || "Room",
+        foodPrice: FOOD_PRICE,
+        foodValue: FOOD_HUNGER,
+        rentPerDay: RENT_PER_DAY,
+      },
     };
   }
 
@@ -196,6 +210,7 @@ export async function onRequest(context) {
     const rows = await DB.prepare(`
       SELECT users.id, users.username, users.is_admin, users.wallet, users.bank, users.debt,
         users.rating, users.day, users.loan_due, users.score,
+        users.hunger, users.food, users.rent_due, users.housing,
         CASE WHEN bans.user_id IS NULL THEN 0 ELSE 1 END AS banned,
         bans.reason AS ban_reason
       FROM users
@@ -221,6 +236,13 @@ export async function onRequest(context) {
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function hungerStatus(hunger) {
+    if (hunger <= 0) return "Starving";
+    if (hunger < 25) return "Hungry";
+    if (hunger < 60) return "Okay";
+    return "Fed";
   }
 
   function reason(value) {
@@ -563,6 +585,9 @@ export async function onRequest(context) {
     if (action === "complete") {
       const quest = await activeWorkQuest(user.id);
       if (!quest) return json({ error: "No active work quest" }, 400);
+      if (Number(user.hunger ?? 100) <= 0) {
+        return json({ error: "Eat food before completing work", quest: publicWorkQuest(quest) }, 400);
+      }
 
       const current = nowSeconds();
       const remainingSeconds = Math.max(0, Number(quest.available_at) - current);
@@ -602,6 +627,45 @@ export async function onRequest(context) {
     }
 
     return json({ error: "Bad work action" }, 400);
+  }
+
+  if (path === "/life" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+    const amount = Math.max(1, money(data.amount || 1));
+    const food = Number(user.food ?? 0);
+    const hunger = Number(user.hunger ?? 100);
+    const rentDue = Number(user.rent_due ?? 0);
+
+    if (action === "buyFood") {
+      const count = clamp(amount, 1, 20);
+      const cost = count * FOOD_PRICE;
+      if (cost > user.wallet) return json({ error: "Not enough wallet for food" }, 400);
+      await DB.prepare("UPDATE users SET wallet = wallet - ?, food = food + ? WHERE id = ?")
+        .bind(cost, count, user.id).run();
+      return json({ ok: true, bought: count, cost });
+    }
+
+    if (action === "eatFood") {
+      if (food < 1) return json({ error: "No food in storage" }, 400);
+      const nextHunger = clamp(hunger + FOOD_HUNGER, 0, 100);
+      await DB.prepare("UPDATE users SET food = food - 1, hunger = ? WHERE id = ?")
+        .bind(nextHunger, user.id).run();
+      return json({ ok: true, hunger: nextHunger, status: hungerStatus(nextHunger) });
+    }
+
+    if (action === "payRent") {
+      if (rentDue <= 0) return json({ ok: true, paid: 0 });
+      const paid = Math.min(amount, user.wallet, rentDue);
+      if (paid < 1) return json({ error: "Not enough wallet for rent" }, 400);
+      const nextRentDue = rentDue - paid;
+      const nextRating = nextRentDue === 0 ? Math.min(850, Number(user.rating) + 2) : user.rating;
+      await DB.prepare("UPDATE users SET wallet = wallet - ?, rent_due = ?, rating = ? WHERE id = ?")
+        .bind(paid, nextRentDue, nextRating, user.id).run();
+      return json({ ok: true, paid, rentDue: nextRentDue });
+    }
+
+    return json({ error: "Bad life action" }, 400);
   }
 
   if (path.startsWith("/market/") && request.method === "GET") {
@@ -742,13 +806,17 @@ export async function onRequest(context) {
       let rating = user.rating;
       let due = user.loan_due;
       const day = user.day + 1;
+      const hunger = Math.max(0, Number(user.hunger ?? 100) - HUNGER_DECAY_PER_DAY);
+      const rentDue = Number(user.rent_due ?? 0) + RENT_PER_DAY;
       if (debt > 0 && due !== null && day > due) {
         rating = Math.max(300, rating - 50);
         debt = Math.ceil(debt * 1.15);
         due = day + 2;
       }
-      await DB.prepare("UPDATE users SET day=?, debt=?, rating=?, loan_due=? WHERE id=?")
-        .bind(day, debt, rating, due, user.id).run();
+      if (hunger <= 0) rating = Math.max(300, rating - 15);
+      if (rentDue >= RENT_WARNING_DUE) rating = Math.max(300, rating - 10);
+      await DB.prepare("UPDATE users SET day=?, debt=?, rating=?, loan_due=?, hunger=?, rent_due=? WHERE id=?")
+        .bind(day, debt, rating, due, hunger, rentDue, user.id).run();
     } else {
       return json({ error: "Bad action" }, 400);
     }
@@ -988,6 +1056,10 @@ async function ensureRuntimeTables(DB) {
       VALUES (?, ?, ?, ?)
     `).bind(`${asset.symbol}-initial`, asset.symbol, asset.price, now)),
   ]);
+  await ensureTableColumn(DB, "users", "hunger", "INTEGER NOT NULL DEFAULT 100");
+  await ensureTableColumn(DB, "users", "food", "INTEGER NOT NULL DEFAULT 1");
+  await ensureTableColumn(DB, "users", "rent_due", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "users", "housing", "TEXT NOT NULL DEFAULT 'Room'");
   await ensureTableColumn(DB, "work_quests", "description", "TEXT NOT NULL DEFAULT ''");
   await ensureTableColumn(DB, "work_quests", "objective", "TEXT NOT NULL DEFAULT ''");
   await ensureTableColumn(DB, "market_assets", "tick_offset", "INTEGER NOT NULL DEFAULT 0");

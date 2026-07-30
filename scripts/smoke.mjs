@@ -213,6 +213,18 @@ try {
   assert(finalState.user.bank === 50, `expected bank 50, got ${finalState.user.bank}`);
   assert(finalState.user.score === 5, `expected score 5, got ${finalState.user.score}`);
   assert(finalState.user.rating === 700, `expected rating 700, got ${finalState.user.rating}`);
+  assert(finalState.user.life?.hunger === 100, "new player hunger missing");
+  assert(finalState.user.life?.food >= 1, "new player food storage missing");
+
+  await request("/api/life", { method: "POST", body: { action: "buyFood", amount: 1 }, session: player });
+  await request("/api/life", { method: "POST", body: { action: "eatFood", amount: 1 }, session: player });
+  await request("/api/bank", { method: "POST", body: { action: "nextDay", amount: 1 }, session: player });
+  const lifeAfterDay = await request("/api/state", { session: player });
+  assert(lifeAfterDay.user.life.hunger === 82, `expected hunger 82 after next day, got ${lifeAfterDay.user.life.hunger}`);
+  assert(lifeAfterDay.user.life.rentDue === 22, `expected rent due 22, got ${lifeAfterDay.user.life.rentDue}`);
+  await request("/api/life", { method: "POST", body: { action: "payRent", amount: 999 }, session: player });
+  const lifeAfterRent = await request("/api/state", { session: player });
+  assert(lifeAfterRent.user.life.rentDue === 0, `expected rent due 0, got ${lifeAfterRent.user.life.rentDue}`);
 
   const roulette = await request("/api/casino/roulette", {
     method: "POST",
