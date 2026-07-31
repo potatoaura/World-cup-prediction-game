@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS owned_properties (
   user_id TEXT NOT NULL,
   property_id TEXT NOT NULL,
   rented_out INTEGER NOT NULL DEFAULT 0,
+  condition INTEGER NOT NULL DEFAULT 100,
   created_at INTEGER NOT NULL
 );
 
@@ -132,6 +133,44 @@ CREATE TABLE IF NOT EXISTS store_stock (
 
 CREATE TABLE IF NOT EXISTS store_sales (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  unit_price INTEGER NOT NULL,
+  revenue INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- Multi-location retail tables. The legacy retail_* tables remain in place so
+-- existing stores can be copied without destructive schema changes.
+CREATE TABLE IF NOT EXISTS player_stores (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  premises_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  markup REAL NOT NULL DEFAULT 1,
+  shelves INTEGER NOT NULL DEFAULT 0,
+  fridges INTEGER NOT NULL DEFAULT 0,
+  checkouts INTEGER NOT NULL DEFAULT 0,
+  signage INTEGER NOT NULL DEFAULT 0,
+  reputation INTEGER NOT NULL DEFAULT 50,
+  condition INTEGER NOT NULL DEFAULT 100,
+  lifetime_revenue INTEGER NOT NULL DEFAULT 0,
+  customers_served INTEGER NOT NULL DEFAULT 0,
+  last_sales_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS player_store_stock (
+  store_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(store_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS player_store_sales (
+  id TEXT PRIMARY KEY,
+  store_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
   product_id TEXT NOT NULL,
   quantity INTEGER NOT NULL,
@@ -186,6 +225,10 @@ CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, s
 CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at);
 CREATE INDEX IF NOT EXISTS idx_owned_properties_user ON owned_properties(user_id);
 CREATE INDEX IF NOT EXISTS idx_store_sales_user_created ON store_sales(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_player_stores_user ON player_stores(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_player_stores_user_premises ON player_stores(user_id, premises_id);
+CREATE INDEX IF NOT EXISTS idx_player_store_sales_store_created ON player_store_sales(store_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_player_store_sales_user_created ON player_store_sales(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
 CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at);

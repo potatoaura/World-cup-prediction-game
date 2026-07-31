@@ -260,6 +260,17 @@ try {
   });
   const propertyAfterRentOut = await request("/api/state", { session: propertyBuyer });
   assert(propertyAfterRentOut.properties.incomePerDay > 0, "renting out property did not add income");
+  await request("/api/bank", { method: "POST", body: { action: "nextDay", amount: 1 }, session: propertyBuyer });
+  const propertyAfterWear = await request("/api/state", { session: propertyBuyer });
+  assert(propertyAfterWear.properties.owned[0].condition === 96, "rented property did not wear by four points per day");
+  assert(propertyAfterWear.properties.owned[0].repairCost > 0, "property repair cost missing after wear");
+  await request("/api/property", {
+    method: "POST",
+    body: { action: "repair", ownedId: propertyAfterWear.properties.owned[0].id },
+    session: propertyBuyer,
+  });
+  const propertyAfterRepair = await request("/api/state", { session: propertyBuyer });
+  assert(propertyAfterRepair.properties.owned[0].condition === 100, "property repair did not restore condition");
   await request("/api/property", {
     method: "POST",
     body: { action: "rentHome", propertyId: "market_studio" },
@@ -275,51 +286,78 @@ try {
   });
   await request("/api/admin/userAction", {
     method: "POST",
-    body: { userId: registeredStoreOwner.user.id, action: "addWallet", amount: 60000, reason: "smoke store grant" },
+    body: { userId: registeredStoreOwner.user.id, action: "addWallet", amount: 170000, reason: "smoke store grant" },
     session: admin,
   });
   const storeBeforeBuy = await request("/api/state", { session: storeOwner });
   assert(!storeBeforeBuy.store.owned, "new player should not own a store");
   assert(storeBeforeBuy.store.premisesListings.some(item => item.id === "street_kiosk" && item.price === 25000), "store premises catalog missing");
-  await request("/api/store", {
+  const firstStorePurchase = await request("/api/store", {
     method: "POST",
     body: { action: "buyPremises", premisesId: "street_kiosk" },
     session: storeOwner,
   });
+  const firstStoreId = firstStorePurchase.storeId;
+  assert(firstStoreId, "store purchase did not return a location id");
   await request("/api/store", {
     method: "POST",
-    body: { action: "buyEquipment", equipmentId: "shelves" },
+    body: { action: "buyEquipment", storeId: firstStoreId, equipmentId: "shelves" },
     session: storeOwner,
   });
   await request("/api/store", {
     method: "POST",
-    body: { action: "restock", productId: "bread", quantity: 20 },
+    body: { action: "restock", storeId: firstStoreId, productId: "bread", quantity: 20 },
     session: storeOwner,
   });
   await request("/api/store", {
     method: "POST",
-    body: { action: "setMarkup", markup: 1.2 },
+    body: { action: "setMarkup", storeId: firstStoreId, markup: 1.2 },
     session: storeOwner,
   });
   await request("/api/store", {
     method: "POST",
-    body: { action: "rename", name: "Smoke Market" },
+    body: { action: "rename", storeId: firstStoreId, name: "Smoke Market" },
+    session: storeOwner,
+  });
+  const secondStorePurchase = await request("/api/store", {
+    method: "POST",
+    body: { action: "buyPremises", premisesId: "corner_store" },
+    session: storeOwner,
+  });
+  assert(secondStorePurchase.storeId !== firstStoreId, "second location reused the first store id");
+  await expectError(400, "/api/store", {
+    method: "POST",
+    body: { action: "buyPremises", premisesId: "street_kiosk" },
     session: storeOwner,
   });
   const storeReady = await request("/api/state", { session: storeOwner });
-  assert(storeReady.store.owned && storeReady.store.status === "open", "stocked store should be open");
-  assert(storeReady.store.name === "Smoke Market", "store rename did not persist");
-  assert(storeReady.store.products.find(item => item.id === "bread")?.stock === 20, "store stock did not persist");
-  assert(storeReady.store.products.find(item => item.id === "water")?.unlocked === false, "fridge product unlocked without fridge");
+  assert(storeReady.store.owned && storeReady.store.stores.length === 2, "player should own two store locations");
+  const firstStoreReady = storeReady.store.stores.find(item => item.id === firstStoreId);
+  const secondStoreReady = storeReady.store.stores.find(item => item.id === secondStorePurchase.storeId);
+  assert(firstStoreReady?.status === "open", "stocked store should be open");
+  assert(firstStoreReady.name === "Smoke Market", "store rename did not persist");
+  assert(firstStoreReady.products.length >= 14, "new supplier products missing");
+  assert(firstStoreReady.products.find(item => item.id === "bread")?.stock === 20, "store stock did not persist");
+  assert(firstStoreReady.products.find(item => item.id === "water")?.unlocked === false, "fridge product unlocked without fridge");
+  assert(secondStoreReady.products.find(item => item.id === "bread")?.stock === 0, "stock leaked into second location");
   let storeAfterSales;
   for (let index = 0; index < 4; index++) {
     await delay(1100);
     storeAfterSales = await request("/api/state", { session: storeOwner });
   }
-  assert(storeAfterSales.store.lifetimeRevenue > 0, "automatic store sales produced no revenue");
-  assert(storeAfterSales.store.products.find(item => item.id === "bread")?.stock < 20, "automatic store sales did not reduce stock");
-  assert(storeAfterSales.store.recentSales.length > 0, "store sales history missing");
+  const firstStoreAfterSales = storeAfterSales.store.stores.find(item => item.id === firstStoreId);
+  assert(firstStoreAfterSales.lifetimeRevenue > 0, "automatic store sales produced no revenue");
+  assert(firstStoreAfterSales.products.find(item => item.id === "bread")?.stock < 20, "automatic store sales did not reduce stock");
+  assert(firstStoreAfterSales.recentSales.length > 0, "store sales history missing");
+  assert(firstStoreAfterSales.condition < 100, "store did not wear after serving customers");
   assert(storeAfterSales.user.wallet > storeReady.user.wallet, "store revenue did not reach wallet");
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "repair", storeId: firstStoreId },
+    session: storeOwner,
+  });
+  const storeAfterRepair = await request("/api/state", { session: storeOwner });
+  assert(storeAfterRepair.store.stores.find(item => item.id === firstStoreId)?.condition === 100, "store repair failed");
 
   await request("/api/life", { method: "POST", body: { action: "buyItem", itemId: "pizza", amount: 1 }, session: player });
   await request("/api/life", { method: "POST", body: { action: "useItem", itemId: "pizza", amount: 1 }, session: player });
@@ -508,7 +546,8 @@ try {
     borrowerDebt: borrowerState.user.debt,
     workReward: completedWork.reward,
     workDifficulty: readyWorkState.activeQuest.difficulty,
-    storeRevenue: storeAfterSales.store.lifetimeRevenue,
+    storeRevenue: firstStoreAfterSales.lifetimeRevenue,
+    storeLocations: storeAfterSales.store.stores.length,
   }, null, 2));
 } catch (error) {
   console.error(serverOutput.trim());

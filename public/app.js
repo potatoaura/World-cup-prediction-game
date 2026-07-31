@@ -13,6 +13,9 @@ let marketDetailLoading = false;
 let marketDetailRange = "all";
 let housingListingsOpen = false;
 let propertyListingsOpen = false;
+let storeLocationsOpen = false;
+let activeStoreId = "";
+let activeStoreProductId = "";
 
 const MARKET_DETAIL_RANGES = [
   { id: "5m", label: "5M", seconds: 5 * 60 },
@@ -453,25 +456,60 @@ function renderProperties() {
       <div>
         <b>${esc(item.name)}</b>
         <span>${esc(item.area)} | floor ${item.floor} | comfort ${item.comfort}</span>
+        <div class="conditionTrack" title="Apartment condition">
+          <i style="width:${item.condition}%"></i>
+        </div>
+        <small>Condition ${item.condition}/100${item.condition < 20 ? " | repair required" : ""}</small>
       </div>
       <div>
-        <strong>${item.rentedOut ? `+${item.income}/day` : "Idle"}</strong>
+        <strong>${item.rentedOut ? `+${item.effectiveIncome}/day` : "Idle"}</strong>
         <small>${item.rentedOut ? "Rented out" : "Not rented"}</small>
       </div>
-      <button class="secondary" onclick="propertyAction('toggleRentOut','${esc(item.propertyId)}','${esc(item.id)}')">
-        ${item.rentedOut ? "Stop rent" : "Rent out"}
-      </button>
+      <div class="propertyManageActions">
+        <button class="secondary" onclick="propertyAction('toggleRentOut','${esc(item.propertyId)}','${esc(item.id)}')"
+          ${!item.rentedOut && item.condition < 20 ? "disabled" : ""}>
+          ${item.rentedOut ? "Stop rent" : "Rent out"}
+        </button>
+        <button onclick="propertyAction('repair','${esc(item.propertyId)}','${esc(item.id)}')"
+          ${item.repairCost < 1 || STATE.user.wallet < item.repairCost ? "disabled" : ""}>
+          ${item.repairCost < 1 ? "Repaired" : `Repair ${item.repairCost}`}
+        </button>
+      </div>
     </div>
   `).join("") : `<div class="propertyEmpty">No owned apartments</div>`;
+}
+
+function storePremisesCards(listings) {
+  return `<div class="storePremisesGrid">
+    ${(listings || []).map(premises => `
+      <div class="storePremises ${premises.owned ? "owned" : ""}">
+        <div class="storePremisesTop">
+          <span>${esc(premises.area)}</span>
+          <b>${premises.price}</b>
+        </div>
+        <h3>${esc(premises.name)}</h3>
+        <p>${esc(premises.description)}</p>
+        <div class="storePremisesStats">
+          <span>Capacity <b>${premises.capacity}</b></span>
+          <span>Traffic <b>${Math.round(premises.traffic * 100)}</b></span>
+          <span>Prestige <b>${premises.prestige}</b></span>
+        </div>
+        <button onclick="buyStorePremises('${esc(premises.id)}')"
+          ${premises.owned || STATE.user.wallet < premises.price ? "disabled" : ""}>
+          ${premises.owned ? "Location owned" : STATE.user.wallet >= premises.price ? "Buy premises" : `Need ${premises.price}`}
+        </button>
+      </div>
+    `).join("")}
+  </div>`;
 }
 
 function renderStore() {
   const panel = el("storePanel");
   const content = el("storeContent");
   if (!STATE.user || !panel || !content) return;
-  const store = STATE.store || { owned: false, premisesListings: [] };
+  const storePortfolio = STATE.store || { owned: false, stores: [], premisesListings: [] };
 
-  if (!store.owned) {
+  if (!storePortfolio.owned) {
     content.innerHTML = `
       <div class="storeLaunch">
         <div class="storefrontPreview">
@@ -485,34 +523,22 @@ function renderStore() {
           <p>Four retail units are currently listed.</p>
         </div>
       </div>
-      <div class="storePremisesGrid">
-        ${(store.premisesListings || []).map(premises => `
-          <div class="storePremises">
-            <div class="storePremisesTop">
-              <span>${esc(premises.area)}</span>
-              <b>${premises.price}</b>
-            </div>
-            <h3>${esc(premises.name)}</h3>
-            <p>${esc(premises.description)}</p>
-            <div class="storePremisesStats">
-              <span>Capacity <b>${premises.capacity}</b></span>
-              <span>Traffic <b>${Math.round(premises.traffic * 100)}</b></span>
-              <span>Prestige <b>${premises.prestige}</b></span>
-            </div>
-            <button onclick="buyStorePremises('${esc(premises.id)}')" ${STATE.user.wallet >= premises.price ? "" : "disabled"}>
-              ${STATE.user.wallet >= premises.price ? "Buy premises" : `Need ${premises.price}`}
-            </button>
-          </div>
-        `).join("")}
-      </div>
+      ${storePremisesCards(storePortfolio.premisesListings)}
     `;
     return;
   }
+
+  const stores = Array.isArray(storePortfolio.stores) && storePortfolio.stores.length
+    ? storePortfolio.stores
+    : [storePortfolio];
+  if (!stores.some(item => item.id === activeStoreId)) activeStoreId = stores[0].id;
+  const store = stores.find(item => item.id === activeStoreId) || stores[0];
 
   const status = ({
     open: { label: "OPEN", detail: "Customers are shopping" },
     setup: { label: "SETUP", detail: "Install shelves or a refrigerator" },
     out_of_stock: { label: "EMPTY", detail: "Restock products to open" },
+    maintenance: { label: "REPAIR", detail: "The store is too worn to serve customers" },
   })[store.status] || { label: "CLOSED", detail: "Store unavailable" };
   const equipment = Array.isArray(store.equipment) ? store.equipment : [];
   const products = Array.isArray(store.products) ? store.products : [];
@@ -536,8 +562,29 @@ function renderStore() {
   const customers = store.status === "open"
     ? Array.from({ length: Math.min(5, 2 + Number(store.premises.prestige || 0)) }, (_, index) => `<i style="--customer:${index}"></i>`).join("")
     : "";
+  const sceneProducts = products.filter(product => product.stock > 0).slice(0, 8).map((product, index) => `
+    <button type="button" class="sceneProduct ${esc(product.color)}" style="--col:${index % 4};--row:${Math.floor(index / 4)}"
+      title="${esc(product.name)}: ${product.stock} in stock" onclick="focusStoreProduct('${esc(product.id)}')">
+      <span>${esc(product.name)}</span><b>${product.stock}</b>
+    </button>
+  `).join("");
 
   content.innerHTML = `
+    <div class="storePortfolioBar">
+      <div class="storeTabs" role="tablist" aria-label="Owned stores">
+        ${stores.map(item => `
+          <button type="button" role="tab" aria-selected="${item.id === store.id}"
+            class="${item.id === store.id ? "active" : ""}" onclick="selectStore('${esc(item.id)}')">
+            <b>${esc(item.name)}</b><span>${esc(item.premises.area)}</span>
+          </button>
+        `).join("")}
+      </div>
+      <button class="secondary storeAddLocation" onclick="toggleStoreLocations()">
+        ${storeLocationsOpen ? "Hide locations" : `Add location ${stores.length}/${storePortfolio.maxStores || 4}`}
+      </button>
+    </div>
+    ${storeLocationsOpen ? storePremisesCards(storePortfolio.premisesListings) : ""}
+
     <div class="storeHeader">
       <div>
         <span class="storeEyebrow">${esc(store.premises.area)} / ${esc(store.premises.name)}</span>
@@ -554,6 +601,7 @@ function renderStore() {
       <span>Reputation <b>${store.reputation}/100</b></span>
       <span>Projected/hour <b>+${store.projectedHourlyProfit}</b></span>
       <span>Storage <b>${store.stockUsed}/${store.capacity}</b></span>
+      <span>Condition <b>${store.condition}/100</b></span>
     </div>
 
     <div class="storeWorkspace">
@@ -562,6 +610,7 @@ function renderStore() {
         <div class="storeSceneFloor">
           <div class="storeAisles">${sceneShelves}</div>
           <div class="storeCold">${sceneFridges}</div>
+          <div class="storeSceneProducts">${sceneProducts}</div>
           <div class="visualCheckout ${checkoutLevel ? "upgraded" : ""}"><span></span><i>${checkoutLevel}</i></div>
           <div class="storeCustomers">${customers}</div>
         </div>
@@ -572,7 +621,7 @@ function renderStore() {
           <label for="storeName">Store name</label>
           <div class="storeNameControl">
             <input id="storeName" value="${esc(store.name)}" maxlength="28">
-            <button class="secondary" onclick="renameStore()">Save</button>
+            <button class="secondary" onclick="renameStore('${esc(store.id)}')">Save</button>
           </div>
         </div>
         <div class="storeControlBlock">
@@ -580,10 +629,19 @@ function renderStore() {
           <div class="storeMarkup">
             ${(store.markupOptions || []).map(option => `
               <button class="${Number(option.value) === Number(store.markup) ? "active" : ""}"
-                onclick="setStoreMarkup(${Number(option.value)})">${esc(option.label)}</button>
+                onclick="setStoreMarkup('${esc(store.id)}',${Number(option.value)})">${esc(option.label)}</button>
             `).join("")}
           </div>
           <small>${esc(store.markupLabel)} price tier</small>
+        </div>
+        <div class="storeControlBlock maintenanceControl ${store.condition <= 30 ? "urgent" : ""}">
+          <label>Building condition</label>
+          <div class="conditionTrack"><i style="width:${store.condition}%"></i></div>
+          <small>${store.condition > 70 ? "Good condition" : store.condition > 10 ? "Wear is reducing customer traffic" : "Closed until repaired"}</small>
+          <button onclick="repairStore('${esc(store.id)}')"
+            ${store.repairCost < 1 || STATE.user.wallet < store.repairCost ? "disabled" : ""}>
+            ${store.repairCost < 1 ? "No repairs needed" : `Repair for ${store.repairCost}`}
+          </button>
         </div>
       </div>
     </div>
@@ -601,7 +659,7 @@ function renderStore() {
           </div>
           <div class="storeLevelTrack">${Array.from({ length: item.maxLevel }, (_, index) => `<i class="${index < item.level ? "filled" : ""}"></i>`).join("")}</div>
           <p>${item.capacity ? `Storage capacity +${item.capacity} per level` : "Customer traffic upgrade"}</p>
-          <button onclick="buyStoreEquipment('${esc(item.id)}')" ${item.maxed || STATE.user.wallet < item.nextCost ? "disabled" : ""}>
+          <button onclick="buyStoreEquipment('${esc(store.id)}','${esc(item.id)}')" ${item.maxed || STATE.user.wallet < item.nextCost ? "disabled" : ""}>
             ${item.maxed ? "Max level" : `Upgrade ${item.nextCost}`}
           </button>
         </div>
@@ -614,7 +672,7 @@ function renderStore() {
     </div>
     <div class="storeProductGrid">
       ${products.map(product => `
-        <div class="storeProduct ${esc(product.color)} ${product.unlocked ? "" : "locked"}">
+        <div id="storeProduct_${esc(product.id)}" class="storeProduct ${esc(product.color)} ${product.unlocked ? "" : "locked"} ${activeStoreProductId === product.id ? "selected" : ""}">
           <div class="storeProductBand"></div>
           <div class="storeProductTop">
             <div><b>${esc(product.name)}</b><span>${product.fixture} L${product.fixtureLevel}</span></div>
@@ -627,7 +685,7 @@ function renderStore() {
           </div>
           <div class="storeRestock">
             <input id="storeQty_${esc(product.id)}" type="number" value="10" min="1" max="100">
-            <button onclick="restockStore('${esc(product.id)}')" ${product.unlocked ? "" : "disabled"}>
+            <button onclick="restockStore('${esc(store.id)}','${esc(product.id)}')" ${product.unlocked ? "" : "disabled"}>
               ${product.unlocked ? "Order stock" : "Locked"}
             </button>
           </div>
@@ -665,36 +723,68 @@ async function runStoreAction(payload, successMessage) {
 function buyStorePremises(premisesId) {
   return runStoreAction(
     { action: "buyPremises", premisesId },
-    result => `Store premises bought: ${result.store.premises.name}`,
+    result => {
+      activeStoreId = result.storeId;
+      storeLocationsOpen = false;
+      return `Store premises bought: ${result.location?.premises?.name || "new location"}`;
+    },
   );
 }
 
-function buyStoreEquipment(equipmentId) {
+function selectStore(storeId) {
+  activeStoreId = storeId;
+  activeStoreProductId = "";
+  renderStore();
+}
+
+function toggleStoreLocations() {
+  storeLocationsOpen = !storeLocationsOpen;
+  renderStore();
+}
+
+function focusStoreProduct(productId) {
+  activeStoreProductId = productId;
+  renderStore();
+  requestAnimationFrame(() => {
+    const card = el(`storeProduct_${productId}`);
+    card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    card?.querySelector("input")?.focus({ preventScroll: true });
+  });
+}
+
+function buyStoreEquipment(storeId, equipmentId) {
   return runStoreAction(
-    { action: "buyEquipment", equipmentId },
+    { action: "buyEquipment", storeId, equipmentId },
     result => `Store equipment upgraded for ${result.cost}`,
   );
 }
 
-function restockStore(productId) {
+function restockStore(storeId, productId) {
   const quantity = Math.max(1, Number(el(`storeQty_${productId}`)?.value || 1));
   return runStoreAction(
-    { action: "restock", productId, quantity },
+    { action: "restock", storeId, productId, quantity },
     result => `Store stock: ${result.quantity} ${result.productId} for ${result.cost}`,
   );
 }
 
-function setStoreMarkup(markup) {
+function setStoreMarkup(storeId, markup) {
   return runStoreAction(
-    { action: "setMarkup", markup },
-    result => `Store pricing set to ${result.store.markupLabel}`,
+    { action: "setMarkup", storeId, markup },
+    () => "Store pricing updated",
   );
 }
 
-function renameStore() {
+function renameStore(storeId) {
   return runStoreAction(
-    { action: "rename", name: el("storeName")?.value || "" },
+    { action: "rename", storeId, name: el("storeName")?.value || "" },
     result => `Store renamed to ${result.name}`,
+  );
+}
+
+function repairStore(storeId) {
+  return runStoreAction(
+    { action: "repair", storeId },
+    result => result.cost ? `Store repaired for ${result.cost}` : "Store needs no repairs",
   );
 }
 
