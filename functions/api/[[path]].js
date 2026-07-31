@@ -598,6 +598,72 @@ const STORE_EQUIPMENT = [
   { id: "signage", name: "Store Signage", baseCost: 5000, maxLevel: 3, capacity: 0, description: "Bring more people in from the street." },
 ];
 
+const STORE_STAFF = [
+  { id: "cashier", name: "Cashier", baseCost: 8000, maxLevel: 3, badge: "C", description: "Opens faster lanes and increases customer traffic." },
+  { id: "stocker", name: "Stock Clerk", baseCost: 6000, maxLevel: 3, badge: "S", description: "Adds 20 storage slots per level and protects deliveries." },
+  { id: "cleaner", name: "Cleaner", baseCost: 5000, maxLevel: 3, badge: "K", description: "Slows building wear and unlocks inspection responses." },
+  { id: "security", name: "Security", baseCost: 10000, maxLevel: 3, badge: "G", description: "Prevents theft and unlocks safer incident choices." },
+  { id: "manager", name: "Manager", baseCost: 15000, maxLevel: 3, badge: "M", description: "Improves traffic and handles publicity events." },
+];
+
+const STORE_INCIDENTS = [
+  {
+    id: "rush_hour",
+    title: "Sudden Rush Hour",
+    description: "A stadium crowd has entered the district and the checkout line is growing fast.",
+    tone: "gold",
+    choices: [
+      { id: "express_lane", label: "Open express lane", detail: "+500 cash, +4 reputation", requires: "cashier", wallet: 500, reputation: 4, condition: -1 },
+      { id: "all_hands", label: "All hands on deck", detail: "+220 cash, heavier wear", wallet: 220, reputation: 2, condition: -4 },
+      { id: "limit_entry", label: "Limit entry", detail: "+80 cash, -1 reputation", wallet: 80, reputation: -1, condition: -1 },
+    ],
+  },
+  {
+    id: "inspection",
+    title: "Surprise Inspection",
+    description: "A city inspector is checking the shop floor, storage area, and customer facilities.",
+    tone: "blue",
+    choices: [
+      { id: "clean_sweep", label: "Clean sweep", detail: "+8 condition, +7 reputation", requires: "cleaner", wallet: 0, reputation: 7, condition: 8 },
+      { id: "emergency_crew", label: "Emergency crew", detail: "Costs 300, +15 condition", wallet: -300, reputation: 4, condition: 15 },
+      { id: "take_notes", label: "Accept the report", detail: "No cost, -3 reputation", wallet: 0, reputation: -3, condition: 0 },
+    ],
+  },
+  {
+    id: "shoplifter",
+    title: "Shoplifter Spotted",
+    description: "A customer is moving toward the exit with unpaid premium goods.",
+    tone: "red",
+    choices: [
+      { id: "security_stop", label: "Security stop", detail: "+250 recovered, +3 reputation", requires: "security", wallet: 250, reputation: 3, condition: 0 },
+      { id: "lock_doors", label: "Lock the doors", detail: "+80 recovered, minor damage", wallet: 80, reputation: -1, condition: -2 },
+      { id: "write_off", label: "Write off the loss", detail: "Lose 180, avoid a scene", wallet: -180, reputation: 0, condition: 0 },
+    ],
+  },
+  {
+    id: "power_outage",
+    title: "Power Outage",
+    description: "The refrigerators are warming up and customers are waiting in the dark.",
+    tone: "blue",
+    choices: [
+      { id: "save_delivery", label: "Reroute chilled stock", detail: "+100 saved, minor wear", requires: "stocker", wallet: 100, reputation: 2, condition: -2 },
+      { id: "electrician", label: "Call electrician", detail: "Costs 400, +10 condition", wallet: -400, reputation: 3, condition: 10 },
+      { id: "wait_grid", label: "Wait for the grid", detail: "Lose 150 and condition", wallet: -150, reputation: -2, condition: -5 },
+    ],
+  },
+  {
+    id: "influencer_visit",
+    title: "Influencer Visit",
+    description: "A local food creator is filming inside the store and asks to feature the business.",
+    tone: "green",
+    choices: [
+      { id: "manager_campaign", label: "Launch campaign", detail: "+450 cash, +10 reputation", requires: "manager", wallet: 450, reputation: 10, condition: -1 },
+      { id: "free_samples", label: "Offer samples", detail: "Costs 250, +7 reputation", wallet: -250, reputation: 7, condition: 0 },
+      { id: "decline", label: "Decline politely", detail: "No cost, -1 reputation", wallet: 0, reputation: -1, condition: 0 },
+    ],
+  },
+];
+
 const STORE_MARKUPS = [
   { value: 0.85, label: "Budget", demand: 1.18 },
   { value: 1, label: "Regular", demand: 1 },
@@ -629,6 +695,7 @@ export async function onRequest(context) {
   const maxWorkWaitSeconds = Math.max(minWorkWaitSeconds, positiveEnvInt(env.WORK_WAIT_MAX_SECONDS, 600));
   const dayLengthSeconds = positiveEnvInt(env.DAY_LENGTH_SECONDS, DEFAULT_DAY_LENGTH_SECONDS);
   const storeSaleTickSeconds = positiveEnvInt(env.STORE_SALE_TICK_SECONDS, DEFAULT_STORE_SALE_TICK_SECONDS);
+  const fixedStoreEventWaitSeconds = positiveEnvInt(env.STORE_EVENT_WAIT_SECONDS, 0);
   const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax${url.protocol === "https:" ? "; Secure" : ""}`;
 
   const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
@@ -919,6 +986,16 @@ export async function onRequest(context) {
     return STORE_EQUIPMENT.find(equipment => equipment.id === key) || null;
   }
 
+  function storeStaffRole(roleId) {
+    const key = housingKey(roleId);
+    return STORE_STAFF.find(role => role.id === key) || null;
+  }
+
+  function storeIncidentType(incidentType) {
+    const key = housingKey(incidentType);
+    return STORE_INCIDENTS.find(incident => incident.id === key) || null;
+  }
+
   function storeMarkup(value) {
     const number = Number(value);
     return STORE_MARKUPS.find(markup => Math.abs(markup.value - number) < 0.001) || null;
@@ -928,10 +1005,21 @@ export async function onRequest(context) {
     return equipment.baseCost * (Number(currentLevel || 0) + 1);
   }
 
-  function storeCapacity(store, premises) {
+  function storeStaffCost(role, currentLevel) {
+    return role.baseCost * (Number(currentLevel || 0) + 1);
+  }
+
+  async function storeStaffLevels(storeId) {
+    const rows = await DB.prepare("SELECT role_id, level FROM player_store_staff WHERE store_id = ?")
+      .bind(storeId).all();
+    return Object.fromEntries(rows.results.map(row => [row.role_id, Number(row.level || 0)]));
+  }
+
+  function storeCapacity(store, premises, staff = {}) {
     return Number(premises?.capacity || 0)
       + Number(store?.shelves || 0) * 25
-      + Number(store?.fridges || 0) * 20;
+      + Number(store?.fridges || 0) * 20
+      + Number(staff.stocker || 0) * 20;
   }
 
   function storeSalePrice(product, markupValue) {
@@ -948,6 +1036,53 @@ export async function onRequest(context) {
     return missing * Math.max(20, Math.ceil(Number(premises?.price || 0) / 5000));
   }
 
+  function pickStoreEventWaitSeconds() {
+    if (fixedStoreEventWaitSeconds > 0) return fixedStoreEventWaitSeconds;
+    return 120 + Math.floor(Math.random() * 181);
+  }
+
+  function publicStoreIncident(row, staff) {
+    if (!row) return null;
+    const incident = storeIncidentType(row.incident_type);
+    if (!incident) return null;
+    return {
+      id: row.id,
+      type: incident.id,
+      title: incident.title,
+      description: incident.description,
+      tone: incident.tone,
+      createdAt: Number(row.created_at),
+      choices: incident.choices.map(choice => ({
+        id: choice.id,
+        label: choice.label,
+        detail: choice.detail,
+        requires: choice.requires || "",
+        locked: !!choice.requires && Number(staff[choice.requires] || 0) < 1,
+        cost: Math.max(0, -Number(choice.wallet || 0)),
+      })),
+    };
+  }
+
+  async function ensureStoreIncident(store, staff) {
+    let pending = await DB.prepare(`
+      SELECT * FROM store_incidents
+      WHERE store_id = ? AND status IN ('pending', 'resolving')
+      ORDER BY created_at DESC LIMIT 1
+    `).bind(store.id).first();
+    if (pending || Number(store.next_event_at || 0) > nowSeconds()) return publicStoreIncident(pending, staff);
+    const incident = STORE_INCIDENTS[Math.floor(Math.random() * STORE_INCIDENTS.length)];
+    await DB.prepare(`
+      INSERT OR IGNORE INTO store_incidents (id, store_id, user_id, incident_type, status, created_at)
+      VALUES (?, ?, ?, ?, 'pending', ?)
+    `).bind(crypto.randomUUID(), store.id, store.user_id, incident.id, nowSeconds()).run();
+    pending = await DB.prepare(`
+      SELECT * FROM store_incidents
+      WHERE store_id = ? AND status IN ('pending', 'resolving')
+      ORDER BY created_at DESC LIMIT 1
+    `).bind(store.id).first();
+    return publicStoreIncident(pending, staff);
+  }
+
   async function processOneStoreSales(store) {
     const current = nowSeconds();
     const lastSalesAt = Number(store.last_sales_at || current);
@@ -957,6 +1092,7 @@ export async function onRequest(context) {
     const processedAt = lastSalesAt + ticks * storeSaleTickSeconds;
     const premises = storePremises(store.premises_id);
     const markup = storeMarkup(store.markup) || STORE_MARKUPS[1];
+    const staff = await storeStaffLevels(store.id);
     if (Number(store.condition ?? 100) <= 10) {
       await DB.prepare("UPDATE player_stores SET last_sales_at = ? WHERE id = ?")
         .bind(processedAt, store.id).run();
@@ -976,7 +1112,8 @@ export async function onRequest(context) {
     const conditionFactor = 0.5 + clamp(Number(store.condition ?? 100), 0, 100) / 200;
     const traffic = clamp(
       (premises.traffic + Number(store.signage || 0) * 0.07 + Number(store.checkouts || 0) * 0.05
-        + Number(store.reputation || 50) / 500) * markup.demand * conditionFactor,
+        + Number(store.reputation || 50) / 500 + Number(staff.cashier || 0) * 0.05
+        + Number(staff.manager || 0) * 0.03) * markup.demand * conditionFactor,
       0.08,
       0.98,
     );
@@ -1013,7 +1150,7 @@ export async function onRequest(context) {
       return { ...store, last_sales_at: processedAt };
     }
 
-    const wear = Math.max(1, Math.ceil(served / 12));
+    const wear = Math.max(1, Math.ceil(served / (12 + Number(staff.cleaner || 0) * 8)));
     const statements = [
       DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(revenue, store.user_id),
       DB.prepare(`
@@ -1053,7 +1190,7 @@ export async function onRequest(context) {
   }
 
   async function publicStoreState(store) {
-    const [stockRows, salesRows, todayRow] = await Promise.all([
+    const [stockRows, salesRows, todayRow, staffRows, incidentRows] = await Promise.all([
       DB.prepare("SELECT product_id, quantity FROM player_store_stock WHERE store_id = ? ORDER BY product_id").bind(store.id).all(),
       DB.prepare(`
         SELECT product_id, quantity, unit_price, revenue, created_at
@@ -1064,10 +1201,18 @@ export async function onRequest(context) {
       `).bind(store.id).all(),
       DB.prepare("SELECT COALESCE(SUM(revenue), 0) AS revenue FROM player_store_sales WHERE store_id = ? AND created_at >= ?")
         .bind(store.id, nowSeconds() - 24 * 60 * 60).first(),
+      DB.prepare("SELECT role_id, level FROM player_store_staff WHERE store_id = ?").bind(store.id).all(),
+      DB.prepare(`
+        SELECT incident_type, choice_id, resolved_at
+        FROM store_incidents
+        WHERE store_id = ? AND status = 'resolved'
+        ORDER BY resolved_at DESC LIMIT 4
+      `).bind(store.id).all(),
     ]);
     const stock = Object.fromEntries(stockRows.results.map(row => [row.product_id, Number(row.quantity)]));
+    const staff = Object.fromEntries(staffRows.results.map(row => [row.role_id, Number(row.level || 0)]));
     const premises = storePremises(store.premises_id) || STORE_PREMISES[0];
-    const capacity = storeCapacity(store, premises);
+    const capacity = storeCapacity(store, premises, staff);
     const stockUsed = Object.values(stock).reduce((sum, quantity) => sum + Number(quantity), 0);
     const markup = storeMarkup(store.markup) || STORE_MARKUPS[1];
     const unlockedProducts = STORE_PRODUCTS.filter(product => storeProductUnlocked(product, store));
@@ -1076,7 +1221,8 @@ export async function onRequest(context) {
       : 0;
     const traffic = clamp(
       (premises.traffic + Number(store.signage || 0) * 0.07 + Number(store.checkouts || 0) * 0.05
-        + Number(store.reputation || 50) / 500) * markup.demand
+        + Number(store.reputation || 50) / 500 + Number(staff.cashier || 0) * 0.05
+        + Number(staff.manager || 0) * 0.03) * markup.demand
         * (0.5 + clamp(Number(store.condition ?? 100), 0, 100) / 200),
       0.08,
       0.98,
@@ -1103,6 +1249,26 @@ export async function onRequest(context) {
       todayRevenue: Number(todayRow?.revenue || 0),
       projectedHourlyProfit: Math.round((3600 / storeSaleTickSeconds) * traffic * averageProfit),
       nextSaleIn: Math.max(0, Number(store.last_sales_at || 0) + storeSaleTickSeconds - nowSeconds()),
+      incident: await ensureStoreIncident(store, staff),
+      incidentHistory: incidentRows.results.map(row => {
+        const incident = storeIncidentType(row.incident_type);
+        const choice = incident?.choices.find(item => item.id === row.choice_id);
+        return {
+          title: incident?.title || row.incident_type,
+          choice: choice?.label || row.choice_id || "Resolved",
+          resolvedAt: Number(row.resolved_at || 0),
+        };
+      }),
+      staff: STORE_STAFF.map(role => {
+        const level = Number(staff[role.id] || 0);
+        return {
+          ...role,
+          level,
+          maxed: level >= role.maxLevel,
+          nextCost: level >= role.maxLevel ? null : storeStaffCost(role, level),
+        };
+      }),
+      staffCount: Object.values(staff).reduce((sum, level) => sum + Number(level || 0), 0),
       equipment: STORE_EQUIPMENT.map(item => {
         const level = Number(store[item.id] || 0);
         return {
@@ -1151,6 +1317,7 @@ export async function onRequest(context) {
         maxStores: STORE_PREMISES.length,
         premisesListings,
         equipment: STORE_EQUIPMENT.map(item => ({ ...item, level: 0, nextCost: item.baseCost })),
+        staff: STORE_STAFF.map(role => ({ ...role, level: 0, nextCost: role.baseCost })),
         markupOptions: STORE_MARKUPS.map(item => ({ value: item.value, label: item.label })),
       };
     }
@@ -1159,6 +1326,14 @@ export async function onRequest(context) {
       stores,
       maxStores: STORE_PREMISES.length,
       premisesListings,
+      empire: {
+        locations: stores.length,
+        staff: stores.reduce((sum, store) => sum + store.staffCount, 0),
+        todayRevenue: stores.reduce((sum, store) => sum + store.todayRevenue, 0),
+        lifetimeRevenue: stores.reduce((sum, store) => sum + store.lifetimeRevenue, 0),
+        averageCondition: Math.round(stores.reduce((sum, store) => sum + store.condition, 0) / stores.length),
+        activeIncidents: stores.filter(store => store.incident).length,
+      },
       ...stores[0],
     };
   }
@@ -1892,12 +2067,13 @@ export async function onRequest(context) {
       const createdAt = nowSeconds();
       const storeId = crypto.randomUUID();
       const defaultName = `${String(user.username).slice(0, 14)} ${premises.name}`.slice(0, 28);
+      const nextEventAt = createdAt + pickStoreEventWaitSeconds();
       await DB.batch([
         DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(premises.price, user.id),
         DB.prepare(`
-          INSERT INTO player_stores (id, user_id, premises_id, name, last_sales_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(storeId, user.id, premises.id, defaultName, createdAt, createdAt),
+          INSERT INTO player_stores (id, user_id, premises_id, name, last_sales_at, next_event_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(storeId, user.id, premises.id, defaultName, createdAt, nextEventAt, createdAt),
       ]);
       const state = await storeState(user.id);
       return json({ ok: true, action, storeId, location: state.stores.find(item => item.id === storeId), store: state });
@@ -1910,6 +2086,79 @@ export async function onRequest(context) {
     await processStoreSales(user.id, store.id);
     store = await DB.prepare("SELECT * FROM player_stores WHERE id = ? AND user_id = ?").bind(store.id, user.id).first();
     const freshUser = await userById(user.id);
+
+    if (action === "hireStaff") {
+      const role = storeStaffRole(data.roleId);
+      if (!role) return json({ error: "Staff role not found" }, 404);
+      const staff = await storeStaffLevels(store.id);
+      const level = Number(staff[role.id] || 0);
+      if (level >= role.maxLevel) return json({ error: "Staff role already maxed" }, 400);
+      const cost = storeStaffCost(role, level);
+      if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet to hire or train staff` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(cost, user.id),
+        DB.prepare(`
+          INSERT INTO player_store_staff (store_id, role_id, level)
+          VALUES (?, ?, 1)
+          ON CONFLICT(store_id, role_id) DO UPDATE SET level = level + 1
+        `).bind(store.id, role.id),
+      ]);
+      return json({ ok: true, action, roleId: role.id, level: level + 1, cost, store: await storeState(user.id) });
+    }
+
+    if (action === "resolveIncident") {
+      const incidentRow = await DB.prepare(`
+        SELECT * FROM store_incidents
+        WHERE id = ? AND store_id = ? AND user_id = ? AND status = 'pending'
+      `).bind(String(data.incidentId || ""), store.id, user.id).first();
+      if (!incidentRow) return json({ error: "Active store incident not found" }, 404);
+      const incident = storeIncidentType(incidentRow.incident_type);
+      const choice = incident?.choices.find(item => item.id === String(data.choiceId || ""));
+      if (!incident || !choice) return json({ error: "Incident choice not found" }, 400);
+      const staff = await storeStaffLevels(store.id);
+      if (choice.requires && Number(staff[choice.requires] || 0) < 1) {
+        return json({ error: `Hire ${storeStaffRole(choice.requires)?.name || choice.requires} to use this choice` }, 400);
+      }
+      const walletDelta = Number(choice.wallet || 0);
+      if (walletDelta < 0 && Number(freshUser.wallet || 0) < Math.abs(walletDelta)) {
+        return json({ error: `Need ${Math.abs(walletDelta)} wallet for this response` }, 400);
+      }
+      const current = nowSeconds();
+      const claimed = await DB.prepare(`
+        UPDATE store_incidents SET status = 'resolving'
+        WHERE id = ? AND status = 'pending'
+        RETURNING id
+      `).bind(incidentRow.id).first();
+      if (!claimed) return json({ error: "This incident was already resolved" }, 409);
+      try {
+        await DB.batch([
+          DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(walletDelta, user.id),
+          DB.prepare(`
+            UPDATE player_stores
+            SET reputation = MIN(100, MAX(0, reputation + ?)),
+              condition = MIN(100, MAX(0, condition + ?)),
+              lifetime_revenue = lifetime_revenue + ?, next_event_at = ?
+            WHERE id = ?
+          `).bind(Number(choice.reputation || 0), Number(choice.condition || 0), Math.max(0, walletDelta),
+            current + pickStoreEventWaitSeconds(), store.id),
+          DB.prepare(`
+            UPDATE store_incidents
+            SET status = 'resolved', choice_id = ?, resolved_at = ?
+            WHERE id = ? AND status = 'resolving'
+          `).bind(choice.id, current, incidentRow.id),
+        ]);
+      } catch (error) {
+        await DB.prepare("UPDATE store_incidents SET status = 'pending' WHERE id = ? AND status = 'resolving'")
+          .bind(incidentRow.id).run();
+        throw error;
+      }
+      return json({
+        ok: true,
+        action,
+        outcome: { title: incident.title, choice: choice.label, walletDelta },
+        store: await storeState(user.id),
+      });
+    }
 
     if (action === "buyEquipment") {
       const equipment = storeEquipment(data.equipmentId);
@@ -1935,7 +2184,8 @@ export async function onRequest(context) {
       const stockRows = await DB.prepare("SELECT quantity FROM player_store_stock WHERE store_id = ?").bind(store.id).all();
       const used = stockRows.results.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
       const premises = storePremises(store.premises_id);
-      const availableCapacity = Math.max(0, storeCapacity(store, premises) - used);
+      const staff = await storeStaffLevels(store.id);
+      const availableCapacity = Math.max(0, storeCapacity(store, premises, staff) - used);
       if (quantity > availableCapacity) return json({ error: `Only ${availableCapacity} storage slots available` }, 400);
       const cost = product.wholesale * quantity;
       if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet for stock` }, 400);
@@ -2365,6 +2615,7 @@ async function ensureRuntimeTables(DB) {
         lifetime_revenue INTEGER NOT NULL DEFAULT 0,
         customers_served INTEGER NOT NULL DEFAULT 0,
         last_sales_at INTEGER NOT NULL,
+        next_event_at INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       )
     `),
@@ -2392,6 +2643,32 @@ async function ensureRuntimeTables(DB) {
     DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_player_stores_user_premises ON player_stores(user_id, premises_id)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_player_store_sales_store_created ON player_store_sales(store_id, created_at)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_player_store_sales_user_created ON player_store_sales(user_id, created_at)"),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS player_store_staff (
+        store_id TEXT NOT NULL,
+        role_id TEXT NOT NULL,
+        level INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(store_id, role_id)
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS store_incidents (
+        id TEXT PRIMARY KEY,
+        store_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        incident_type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        choice_id TEXT,
+        created_at INTEGER NOT NULL,
+        resolved_at INTEGER
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_store_incidents_store_status ON store_incidents(store_id, status)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_store_incidents_user_created ON store_incidents(user_id, created_at)"),
+    DB.prepare(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_store_incidents_one_pending
+      ON store_incidents(store_id) WHERE status IN ('pending', 'resolving')
+    `),
     DB.prepare(`
       CREATE TABLE IF NOT EXISTS market_assets (
         symbol TEXT PRIMARY KEY,
@@ -2466,6 +2743,7 @@ async function ensureRuntimeTables(DB) {
   await ensureTableColumn(DB, "work_quests", "mistakes", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "market_assets", "tick_offset", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "owned_properties", "condition", "INTEGER NOT NULL DEFAULT 100");
+  await ensureTableColumn(DB, "player_stores", "next_event_at", "INTEGER NOT NULL DEFAULT 0");
   await DB.batch([
     DB.prepare(`
       INSERT OR IGNORE INTO player_stores (
@@ -2493,6 +2771,8 @@ async function ensureRuntimeTables(DB) {
     SET tick_offset = ?
     WHERE symbol = ? AND tick_offset = 0
   `).bind(initialMarketTickOffset(asset.symbol), asset.symbol)));
+  await DB.prepare("UPDATE player_stores SET next_event_at = ? WHERE next_event_at = 0")
+    .bind(now + 120).run();
   runtimeTablesReady = true;
 }
 

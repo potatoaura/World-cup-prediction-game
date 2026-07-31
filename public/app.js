@@ -543,6 +543,10 @@ function renderStore() {
   const equipment = Array.isArray(store.equipment) ? store.equipment : [];
   const products = Array.isArray(store.products) ? store.products : [];
   const sales = Array.isArray(store.recentSales) ? store.recentSales : [];
+  const staff = Array.isArray(store.staff) ? store.staff : [];
+  const incident = store.incident || null;
+  const incidentHistory = Array.isArray(store.incidentHistory) ? store.incidentHistory : [];
+  const empire = storePortfolio.empire || {};
   const shelfLevel = Number(equipment.find(item => item.id === "shelves")?.level || 0);
   const fridgeLevel = Number(equipment.find(item => item.id === "fridges")?.level || 0);
   const checkoutLevel = Number(equipment.find(item => item.id === "checkouts")?.level || 0);
@@ -568,6 +572,12 @@ function renderStore() {
       <span>${esc(product.name)}</span><b>${product.stock}</b>
     </button>
   `).join("");
+  const sceneStaff = staff.filter(role => role.level > 0).map((role, index) => `
+    <button type="button" class="storeEmployee" style="--employee:${index}" title="${esc(role.name)} level ${role.level}"
+      onclick="focusStoreStaff('${esc(role.id)}')">
+      <i>${esc(role.badge)}</i><span>${role.level}</span>
+    </button>
+  `).join("");
 
   content.innerHTML = `
     <div class="storePortfolioBar">
@@ -584,6 +594,35 @@ function renderStore() {
       </button>
     </div>
     ${storeLocationsOpen ? storePremisesCards(storePortfolio.premisesListings) : ""}
+
+    <div class="storeEmpireStrip">
+      <span><small>EMPIRE</small><b>${empire.locations || stores.length} locations</b></span>
+      <span><small>TEAM</small><b>${empire.staff || 0} staff levels</b></span>
+      <span><small>TODAY</small><b>+${empire.todayRevenue || 0}</b></span>
+      <span><small>ALL REVENUE</small><b>${empire.lifetimeRevenue || 0}</b></span>
+      <span class="${empire.activeIncidents ? "alert" : ""}"><small>INCIDENTS</small><b>${empire.activeIncidents || 0} active</b></span>
+    </div>
+
+    ${incident ? `
+      <section class="storeIncident ${esc(incident.tone)}">
+        <div class="incidentSignal"><i></i><span>LIVE STORE EVENT</span></div>
+        <div class="incidentBody">
+          <div>
+            <h3>${esc(incident.title)}</h3>
+            <p>${esc(incident.description)}</p>
+          </div>
+          <div class="incidentChoices">
+            ${incident.choices.map(choice => `
+              <button type="button" onclick="resolveStoreIncident('${esc(store.id)}','${esc(incident.id)}','${esc(choice.id)}')"
+                ${choice.locked || STATE.user.wallet < choice.cost ? "disabled" : ""}>
+                <b>${esc(choice.label)}</b>
+                <span>${choice.locked ? `Needs ${esc(choice.requires)}` : esc(choice.detail)}</span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+      </section>
+    ` : ""}
 
     <div class="storeHeader">
       <div>
@@ -611,6 +650,7 @@ function renderStore() {
           <div class="storeAisles">${sceneShelves}</div>
           <div class="storeCold">${sceneFridges}</div>
           <div class="storeSceneProducts">${sceneProducts}</div>
+          <div class="storeEmployees">${sceneStaff}</div>
           <div class="visualCheckout ${checkoutLevel ? "upgraded" : ""}"><span></span><i>${checkoutLevel}</i></div>
           <div class="storeCustomers">${customers}</div>
         </div>
@@ -644,6 +684,33 @@ function renderStore() {
           </button>
         </div>
       </div>
+    </div>
+
+    <div class="storeSectionHead">
+      <div><span>OPERATIONS TEAM</span><h3>Staff</h3></div>
+      <small>${store.staffCount || 0} total staff levels in this location</small>
+    </div>
+    <div class="storeStaffGrid">
+      ${staff.map(role => `
+        <div id="storeStaff_${esc(role.id)}" class="storeStaff ${role.level ? "hired" : ""}">
+          <div class="staffPortrait"><i>${esc(role.badge)}</i><span>${role.level ? `L${role.level}` : "OPEN"}</span></div>
+          <div class="staffCopy">
+            <b>${esc(role.name)}</b>
+            <p>${esc(role.description)}</p>
+            <div class="storeLevelTrack">${Array.from({ length: role.maxLevel }, (_, index) => `<i class="${index < role.level ? "filled" : ""}"></i>`).join("")}</div>
+          </div>
+          <button onclick="hireStoreStaff('${esc(store.id)}','${esc(role.id)}')"
+            ${role.maxed || STATE.user.wallet < role.nextCost ? "disabled" : ""}>
+            ${role.maxed ? "Team maxed" : role.level ? `Train ${role.nextCost}` : `Hire ${role.nextCost}`}
+          </button>
+        </div>
+      `).join("")}
+    </div>
+    <div class="incidentLedger">
+      <b>Incident log</b>
+      ${incidentHistory.length ? incidentHistory.map(item => `
+        <span><strong>${esc(item.title)}</strong><em>${esc(item.choice)}</em><small>${formatDate(item.resolvedAt)}</small></span>
+      `).join("") : `<span class="empty">No resolved store events</span>`}
     </div>
 
     <div class="storeSectionHead">
@@ -750,6 +817,30 @@ function focusStoreProduct(productId) {
     card?.scrollIntoView({ behavior: "smooth", block: "center" });
     card?.querySelector("input")?.focus({ preventScroll: true });
   });
+}
+
+function focusStoreStaff(roleId) {
+  const card = el(`storeStaff_${roleId}`);
+  card?.scrollIntoView({ behavior: "smooth", block: "center" });
+  card?.animate([
+    { boxShadow: "0 0 0 0 rgba(215,173,85,0)" },
+    { boxShadow: "0 0 0 3px rgba(215,173,85,.55)" },
+    { boxShadow: "0 0 0 0 rgba(215,173,85,0)" },
+  ], { duration: 900 });
+}
+
+function hireStoreStaff(storeId, roleId) {
+  return runStoreAction(
+    { action: "hireStaff", storeId, roleId },
+    result => `${result.roleId} staff upgraded to level ${result.level} for ${result.cost}`,
+  );
+}
+
+function resolveStoreIncident(storeId, incidentId, choiceId) {
+  return runStoreAction(
+    { action: "resolveIncident", storeId, incidentId, choiceId },
+    result => `${result.outcome.title}: ${result.outcome.choice}${result.outcome.walletDelta ? ` (${result.outcome.walletDelta > 0 ? "+" : ""}${result.outcome.walletDelta})` : ""}`,
+  );
 }
 
 function buyStoreEquipment(storeId, equipmentId) {

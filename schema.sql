@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS player_stores (
   lifetime_revenue INTEGER NOT NULL DEFAULT 0,
   customers_served INTEGER NOT NULL DEFAULT 0,
   last_sales_at INTEGER NOT NULL,
+  next_event_at INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 
@@ -177,6 +178,24 @@ CREATE TABLE IF NOT EXISTS player_store_sales (
   unit_price INTEGER NOT NULL,
   revenue INTEGER NOT NULL,
   created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS player_store_staff (
+  store_id TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  level INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(store_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS store_incidents (
+  id TEXT PRIMARY KEY,
+  store_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  incident_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  choice_id TEXT,
+  created_at INTEGER NOT NULL,
+  resolved_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS market_assets (
@@ -229,6 +248,10 @@ CREATE INDEX IF NOT EXISTS idx_player_stores_user ON player_stores(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_player_stores_user_premises ON player_stores(user_id, premises_id);
 CREATE INDEX IF NOT EXISTS idx_player_store_sales_store_created ON player_store_sales(store_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_player_store_sales_user_created ON player_store_sales(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_store_incidents_store_status ON store_incidents(store_id, status);
+CREATE INDEX IF NOT EXISTS idx_store_incidents_user_created ON store_incidents(user_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_store_incidents_one_pending
+  ON store_incidents(store_id) WHERE status IN ('pending', 'resolving');
 CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
 CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at);

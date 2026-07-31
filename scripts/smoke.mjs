@@ -52,6 +52,7 @@ function startServer() {
     "--binding", `ADMIN_CODE=${adminCode}`,
     "--binding", "WORK_WAIT_SECONDS=2",
     "--binding", "STORE_SALE_TICK_SECONDS=1",
+    "--binding", "STORE_EVENT_WAIT_SECONDS=2",
     "--persist-to", persistTo,
     "--port", String(port),
     "--compatibility-date=2026-07-07",
@@ -319,6 +320,16 @@ try {
     body: { action: "rename", storeId: firstStoreId, name: "Smoke Market" },
     session: storeOwner,
   });
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "hireStaff", storeId: firstStoreId, roleId: "cashier" },
+    session: storeOwner,
+  });
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "hireStaff", storeId: firstStoreId, roleId: "stocker" },
+    session: storeOwner,
+  });
   const secondStorePurchase = await request("/api/store", {
     method: "POST",
     body: { action: "buyPremises", premisesId: "corner_store" },
@@ -336,6 +347,10 @@ try {
   const secondStoreReady = storeReady.store.stores.find(item => item.id === secondStorePurchase.storeId);
   assert(firstStoreReady?.status === "open", "stocked store should be open");
   assert(firstStoreReady.name === "Smoke Market", "store rename did not persist");
+  assert(firstStoreReady.staff.find(item => item.id === "cashier")?.level === 1, "cashier hire did not persist");
+  assert(firstStoreReady.staff.find(item => item.id === "stocker")?.level === 1, "stock clerk hire did not persist");
+  assert(firstStoreReady.staffCount === 2, "store staff count incorrect");
+  assert(firstStoreReady.capacity >= firstStoreReady.premises.capacity + 45, "staff storage bonus missing");
   assert(firstStoreReady.products.length >= 14, "new supplier products missing");
   assert(firstStoreReady.products.find(item => item.id === "bread")?.stock === 20, "store stock did not persist");
   assert(firstStoreReady.products.find(item => item.id === "water")?.unlocked === false, "fridge product unlocked without fridge");
@@ -350,7 +365,35 @@ try {
   assert(firstStoreAfterSales.products.find(item => item.id === "bread")?.stock < 20, "automatic store sales did not reduce stock");
   assert(firstStoreAfterSales.recentSales.length > 0, "store sales history missing");
   assert(firstStoreAfterSales.condition < 100, "store did not wear after serving customers");
+  assert(firstStoreAfterSales.incident?.choices?.length === 3, "live store incident was not generated");
   assert(storeAfterSales.user.wallet > storeReady.user.wallet, "store revenue did not reach wallet");
+  const incidentChoice = firstStoreAfterSales.incident.choices.find(choice => !choice.locked && choice.cost <= storeAfterSales.user.wallet);
+  assert(incidentChoice, "store incident has no available response");
+  await request("/api/store", {
+    method: "POST",
+    body: {
+      action: "resolveIncident",
+      storeId: firstStoreId,
+      incidentId: firstStoreAfterSales.incident.id,
+      choiceId: incidentChoice.id,
+    },
+    session: storeOwner,
+  });
+  await expectError(404, "/api/store", {
+    method: "POST",
+    body: {
+      action: "resolveIncident",
+      storeId: firstStoreId,
+      incidentId: firstStoreAfterSales.incident.id,
+      choiceId: incidentChoice.id,
+    },
+    session: storeOwner,
+  });
+  const storeAfterIncident = await request("/api/state", { session: storeOwner });
+  const firstStoreAfterIncident = storeAfterIncident.store.stores.find(item => item.id === firstStoreId);
+  assert(!firstStoreAfterIncident.incident, "resolved incident remained active");
+  assert(firstStoreAfterIncident.incidentHistory[0]?.choice, "incident history did not record response");
+  assert(storeAfterIncident.store.empire.staff === 2, "empire staff summary incorrect");
   await request("/api/store", {
     method: "POST",
     body: { action: "repair", storeId: firstStoreId },
@@ -548,6 +591,8 @@ try {
     workDifficulty: readyWorkState.activeQuest.difficulty,
     storeRevenue: firstStoreAfterSales.lifetimeRevenue,
     storeLocations: storeAfterSales.store.stores.length,
+    storeStaff: storeAfterIncident.store.empire.staff,
+    incidentChoice: incidentChoice.id,
   }, null, 2));
 } catch (error) {
   console.error(serverOutput.trim());
