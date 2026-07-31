@@ -106,6 +106,39 @@ CREATE TABLE IF NOT EXISTS owned_properties (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS retail_stores (
+  user_id TEXT PRIMARY KEY,
+  premises_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  markup REAL NOT NULL DEFAULT 1,
+  shelves INTEGER NOT NULL DEFAULT 0,
+  fridges INTEGER NOT NULL DEFAULT 0,
+  checkouts INTEGER NOT NULL DEFAULT 0,
+  signage INTEGER NOT NULL DEFAULT 0,
+  reputation INTEGER NOT NULL DEFAULT 50,
+  lifetime_revenue INTEGER NOT NULL DEFAULT 0,
+  customers_served INTEGER NOT NULL DEFAULT 0,
+  last_sales_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS store_stock (
+  user_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(user_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS store_sales (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  unit_price INTEGER NOT NULL,
+  revenue INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS market_assets (
   symbol TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -151,6 +184,7 @@ CREATE INDEX IF NOT EXISTS idx_admin_logs_target_user_id ON admin_logs(target_us
 CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at);
 CREATE INDEX IF NOT EXISTS idx_owned_properties_user ON owned_properties(user_id);
+CREATE INDEX IF NOT EXISTS idx_store_sales_user_created ON store_sales(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
 CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at);

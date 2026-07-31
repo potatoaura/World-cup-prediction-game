@@ -42,6 +42,7 @@ function startServer() {
     "--d1", "DB=worldcup_db",
     "--binding", `ADMIN_CODE=${adminCode}`,
     "--binding", "WORK_WAIT_SECONDS=2",
+    "--binding", "STORE_SALE_TICK_SECONDS=1",
     "--persist-to", persistTo,
     "--port", String(port),
     "--compatibility-date=2026-07-07",
@@ -158,10 +159,12 @@ try {
   const admin = makeSession();
   const borrower = makeSession();
   const propertyBuyer = makeSession();
+  const storeOwner = makeSession();
   const playerName = `player_${stamp}`;
   const adminName = `admin_${stamp}`;
   const borrowerName = `borrower_${stamp}`;
   const propertyBuyerName = `property_${stamp}`;
+  const storeOwnerName = `store_${stamp}`;
 
   const registeredPlayer = await request("/api/register", {
     method: "POST",
@@ -255,6 +258,56 @@ try {
   });
   const propertyAfterHomeRent = await request("/api/state", { session: propertyBuyer });
   assert(propertyAfterHomeRent.user.life.housing.id === "market_studio", "renting apartment as home did not update housing");
+
+  const registeredStoreOwner = await request("/api/register", {
+    method: "POST",
+    body: { username: storeOwnerName, password: "pass1234", adminCode: "" },
+    session: storeOwner,
+  });
+  await request("/api/admin/userAction", {
+    method: "POST",
+    body: { userId: registeredStoreOwner.user.id, action: "addWallet", amount: 60000, reason: "smoke store grant" },
+    session: admin,
+  });
+  const storeBeforeBuy = await request("/api/state", { session: storeOwner });
+  assert(!storeBeforeBuy.store.owned, "new player should not own a store");
+  assert(storeBeforeBuy.store.premisesListings.some(item => item.id === "street_kiosk" && item.price === 25000), "store premises catalog missing");
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "buyPremises", premisesId: "street_kiosk" },
+    session: storeOwner,
+  });
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "buyEquipment", equipmentId: "shelves" },
+    session: storeOwner,
+  });
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "restock", productId: "bread", quantity: 20 },
+    session: storeOwner,
+  });
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "setMarkup", markup: 1.2 },
+    session: storeOwner,
+  });
+  await request("/api/store", {
+    method: "POST",
+    body: { action: "rename", name: "Smoke Market" },
+    session: storeOwner,
+  });
+  const storeReady = await request("/api/state", { session: storeOwner });
+  assert(storeReady.store.owned && storeReady.store.status === "open", "stocked store should be open");
+  assert(storeReady.store.name === "Smoke Market", "store rename did not persist");
+  assert(storeReady.store.products.find(item => item.id === "bread")?.stock === 20, "store stock did not persist");
+  assert(storeReady.store.products.find(item => item.id === "water")?.unlocked === false, "fridge product unlocked without fridge");
+  await delay(4200);
+  const storeAfterSales = await request("/api/state", { session: storeOwner });
+  assert(storeAfterSales.store.lifetimeRevenue > 0, "automatic store sales produced no revenue");
+  assert(storeAfterSales.store.products.find(item => item.id === "bread")?.stock < 20, "automatic store sales did not reduce stock");
+  assert(storeAfterSales.store.recentSales.length > 0, "store sales history missing");
+  assert(storeAfterSales.user.wallet > storeReady.user.wallet, "store revenue did not reach wallet");
 
   await request("/api/life", { method: "POST", body: { action: "buyItem", itemId: "pizza", amount: 1 }, session: player });
   await request("/api/life", { method: "POST", body: { action: "useItem", itemId: "pizza", amount: 1 }, session: player });
@@ -421,6 +474,7 @@ try {
     borrowerDebt: borrowerState.user.debt,
     workReward: completedWork.reward,
     workDifficulty: readyWorkState.activeQuest.difficulty,
+    storeRevenue: storeAfterSales.store.lifetimeRevenue,
   }, null, 2));
 } catch (error) {
   console.error(serverOutput.trim());

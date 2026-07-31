@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prediction Economy v3.0</title>
+<title>Prediction Economy v3.1</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
   <div>
-    <h1>Prediction Economy v3.0</h1>
+    <h1>Prediction Economy v3.1</h1>
     <p>Persistent browser economy</p>
   </div>
   <div id="auth" class="auth">
@@ -136,6 +136,14 @@
       </div>
       <div id="propertyListings" class="propertyListings hidden"></div>
       <div id="ownedProperties" class="ownedProperties"></div>
+    </section>
+
+    <section id="storePanel" class="panel storePanel hidden">
+      <div class="head">
+        <h2>Retail Business</h2>
+        <button class="secondary" onclick="loadState()">Refresh</button>
+      </div>
+      <div id="storeContent"></div>
     </section>
 
     <section id="workPanel" class="panel workPanel hidden">

@@ -1,10 +1,12 @@
-let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null };
+let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null };
 let wheelRotation = 0;
 let ballRotation = 0;
 let rouletteBusy = false;
 let serverClockOffsetSeconds = 0;
 let workRefreshQueued = false;
 let lastWorkPollAt = 0;
+let storeRefreshQueued = false;
+let lastStorePollAt = 0;
 let marketDetailSymbol = "";
 let marketDetail = null;
 let marketDetailLoading = false;
@@ -71,9 +73,10 @@ async function loadState() {
     if (Number.isFinite(Number(STATE.now))) {
       serverClockOffsetSeconds = Number(STATE.now) - Math.floor(Date.now() / 1000);
     }
+    lastStorePollAt = Date.now();
     hideError();
   } catch (error) {
-    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null };
+    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null };
     showError(`API error: ${error.message}`);
   }
   render();
@@ -96,6 +99,7 @@ function render() {
   el("timeWidget").classList.toggle("hidden", !user);
   el("lifePanel").classList.toggle("hidden", !user);
   el("propertyPanel").classList.toggle("hidden", !user);
+  el("storePanel").classList.toggle("hidden", !user);
   el("workPanel").classList.toggle("hidden", !user);
   el("marketPanel").classList.toggle("hidden", !user);
   el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
@@ -117,6 +121,7 @@ function render() {
   renderAdmin();
   renderLife();
   renderProperties();
+  renderStore();
   renderWorkQuest();
   renderMarket();
   renderMarketDetail();
@@ -458,6 +463,247 @@ function renderProperties() {
       </button>
     </div>
   `).join("") : `<div class="propertyEmpty">No owned apartments</div>`;
+}
+
+function renderStore() {
+  const panel = el("storePanel");
+  const content = el("storeContent");
+  if (!STATE.user || !panel || !content) return;
+  const store = STATE.store || { owned: false, premisesListings: [] };
+
+  if (!store.owned) {
+    content.innerHTML = `
+      <div class="storeLaunch">
+        <div class="storefrontPreview">
+          <div class="storeAwning"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <b>YOUR STORE</b>
+          <div class="storeWindows"><span></span><span></span><em></em></div>
+        </div>
+        <div>
+          <span class="storeEyebrow">NEW BUSINESS</span>
+          <h3>Choose premises</h3>
+          <p>Four retail units are currently listed.</p>
+        </div>
+      </div>
+      <div class="storePremisesGrid">
+        ${(store.premisesListings || []).map(premises => `
+          <div class="storePremises">
+            <div class="storePremisesTop">
+              <span>${esc(premises.area)}</span>
+              <b>${premises.price}</b>
+            </div>
+            <h3>${esc(premises.name)}</h3>
+            <p>${esc(premises.description)}</p>
+            <div class="storePremisesStats">
+              <span>Capacity <b>${premises.capacity}</b></span>
+              <span>Traffic <b>${Math.round(premises.traffic * 100)}</b></span>
+              <span>Prestige <b>${premises.prestige}</b></span>
+            </div>
+            <button onclick="buyStorePremises('${esc(premises.id)}')" ${STATE.user.wallet >= premises.price ? "" : "disabled"}>
+              ${STATE.user.wallet >= premises.price ? "Buy premises" : `Need ${premises.price}`}
+            </button>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    return;
+  }
+
+  const status = ({
+    open: { label: "OPEN", detail: "Customers are shopping" },
+    setup: { label: "SETUP", detail: "Install shelves or a refrigerator" },
+    out_of_stock: { label: "EMPTY", detail: "Restock products to open" },
+  })[store.status] || { label: "CLOSED", detail: "Store unavailable" };
+  const equipment = Array.isArray(store.equipment) ? store.equipment : [];
+  const products = Array.isArray(store.products) ? store.products : [];
+  const sales = Array.isArray(store.recentSales) ? store.recentSales : [];
+  const shelfLevel = Number(equipment.find(item => item.id === "shelves")?.level || 0);
+  const fridgeLevel = Number(equipment.find(item => item.id === "fridges")?.level || 0);
+  const checkoutLevel = Number(equipment.find(item => item.id === "checkouts")?.level || 0);
+  const stockColors = products.filter(product => product.stock > 0).map(product => product.color);
+  const displayColors = stockColors.length ? stockColors : ["empty"];
+  const sceneShelves = Array.from({ length: Math.max(1, Math.min(4, shelfLevel)) }, (_, index) => `
+    <div class="visualShelf ${shelfLevel ? "built" : "ghost"}">
+      <span></span>
+      <i class="${esc(displayColors[index % displayColors.length])}"></i>
+      <i class="${esc(displayColors[(index + 1) % displayColors.length])}"></i>
+      <i class="${esc(displayColors[(index + 2) % displayColors.length])}"></i>
+    </div>
+  `).join("");
+  const sceneFridges = Array.from({ length: Math.min(3, fridgeLevel) }, (_, index) => `
+    <div class="visualFridge"><i></i><i></i><span>${index + 1}</span></div>
+  `).join("");
+  const customers = store.status === "open"
+    ? Array.from({ length: Math.min(5, 2 + Number(store.premises.prestige || 0)) }, (_, index) => `<i style="--customer:${index}"></i>`).join("")
+    : "";
+
+  content.innerHTML = `
+    <div class="storeHeader">
+      <div>
+        <span class="storeEyebrow">${esc(store.premises.area)} / ${esc(store.premises.name)}</span>
+        <h3>${esc(store.name)}</h3>
+        <small>${status.detail}</small>
+      </div>
+      <span class="storeStatus ${esc(store.status)}"><i></i>${status.label}</span>
+    </div>
+
+    <div class="storeMetrics">
+      <span>Today <b>+${store.todayRevenue}</b></span>
+      <span>Lifetime <b>${store.lifetimeRevenue}</b></span>
+      <span>Customers <b>${store.customersServed}</b></span>
+      <span>Reputation <b>${store.reputation}/100</b></span>
+      <span>Projected/hour <b>+${store.projectedHourlyProfit}</b></span>
+      <span>Storage <b>${store.stockUsed}/${store.capacity}</b></span>
+    </div>
+
+    <div class="storeWorkspace">
+      <div class="storeScene ${esc(store.status)}">
+        <div class="storeSceneSign"><span>${esc(store.name)}</span><small>${status.label}</small></div>
+        <div class="storeSceneFloor">
+          <div class="storeAisles">${sceneShelves}</div>
+          <div class="storeCold">${sceneFridges}</div>
+          <div class="visualCheckout ${checkoutLevel ? "upgraded" : ""}"><span></span><i>${checkoutLevel}</i></div>
+          <div class="storeCustomers">${customers}</div>
+        </div>
+      </div>
+
+      <div class="storeControls">
+        <div class="storeControlBlock">
+          <label for="storeName">Store name</label>
+          <div class="storeNameControl">
+            <input id="storeName" value="${esc(store.name)}" maxlength="28">
+            <button class="secondary" onclick="renameStore()">Save</button>
+          </div>
+        </div>
+        <div class="storeControlBlock">
+          <label>Pricing</label>
+          <div class="storeMarkup">
+            ${(store.markupOptions || []).map(option => `
+              <button class="${Number(option.value) === Number(store.markup) ? "active" : ""}"
+                onclick="setStoreMarkup(${Number(option.value)})">${esc(option.label)}</button>
+            `).join("")}
+          </div>
+          <small>${esc(store.markupLabel)} price tier</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="storeSectionHead">
+      <div><span>FIT OUT</span><h3>Equipment</h3></div>
+      <small>${equipment.reduce((sum, item) => sum + item.level, 0)} upgrades installed</small>
+    </div>
+    <div class="storeEquipmentGrid">
+      ${equipment.map(item => `
+        <div class="storeEquipment ${item.maxed ? "maxed" : ""}">
+          <div>
+            <span>${esc(item.name)}</span>
+            <b>Level ${item.level}/${item.maxLevel}</b>
+          </div>
+          <div class="storeLevelTrack">${Array.from({ length: item.maxLevel }, (_, index) => `<i class="${index < item.level ? "filled" : ""}"></i>`).join("")}</div>
+          <p>${item.capacity ? `Storage capacity +${item.capacity} per level` : "Customer traffic upgrade"}</p>
+          <button onclick="buyStoreEquipment('${esc(item.id)}')" ${item.maxed || STATE.user.wallet < item.nextCost ? "disabled" : ""}>
+            ${item.maxed ? "Max level" : `Upgrade ${item.nextCost}`}
+          </button>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="storeSectionHead">
+      <div><span>SUPPLIERS</span><h3>Products</h3></div>
+      <small>${Math.max(0, store.capacity - store.stockUsed)} storage slots free</small>
+    </div>
+    <div class="storeProductGrid">
+      ${products.map(product => `
+        <div class="storeProduct ${esc(product.color)} ${product.unlocked ? "" : "locked"}">
+          <div class="storeProductBand"></div>
+          <div class="storeProductTop">
+            <div><b>${esc(product.name)}</b><span>${product.fixture} L${product.fixtureLevel}</span></div>
+            <strong>${product.stock}</strong>
+          </div>
+          <div class="storeProductPrices">
+            <span>Buy <b>${product.wholesale}</b></span>
+            <span>Sell <b>${product.salePrice}</b></span>
+            <span>Profit <b>+${product.unitProfit}</b></span>
+          </div>
+          <div class="storeRestock">
+            <input id="storeQty_${esc(product.id)}" type="number" value="10" min="1" max="100">
+            <button onclick="restockStore('${esc(product.id)}')" ${product.unlocked ? "" : "disabled"}>
+              ${product.unlocked ? "Order stock" : "Locked"}
+            </button>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="storeSectionHead">
+      <div><span>REGISTER</span><h3>Recent sales</h3></div>
+      <small>Last 12 transactions</small>
+    </div>
+    <div class="storeSales">
+      ${sales.length ? sales.map(sale => `
+        <div class="storeSaleRow">
+          <span>${esc(sale.productName)}</span>
+          <span>${sale.quantity} sold at ${sale.unitPrice}</span>
+          <b>+${sale.revenue}</b>
+          <small>${formatDate(sale.createdAt)}</small>
+        </div>
+      `).join("") : `<div class="storeSaleEmpty">No sales yet</div>`}
+    </div>
+  `;
+}
+
+async function runStoreAction(payload, successMessage) {
+  try {
+    const result = await api("/api/store", payload);
+    log(successMessage(result));
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function buyStorePremises(premisesId) {
+  return runStoreAction(
+    { action: "buyPremises", premisesId },
+    result => `Store premises bought: ${result.store.premises.name}`,
+  );
+}
+
+function buyStoreEquipment(equipmentId) {
+  return runStoreAction(
+    { action: "buyEquipment", equipmentId },
+    result => `Store equipment upgraded for ${result.cost}`,
+  );
+}
+
+function restockStore(productId) {
+  const quantity = Math.max(1, Number(el(`storeQty_${productId}`)?.value || 1));
+  return runStoreAction(
+    { action: "restock", productId, quantity },
+    result => `Store stock: ${result.quantity} ${result.productId} for ${result.cost}`,
+  );
+}
+
+function setStoreMarkup(markup) {
+  return runStoreAction(
+    { action: "setMarkup", markup },
+    result => `Store pricing set to ${result.store.markupLabel}`,
+  );
+}
+
+function renameStore() {
+  return runStoreAction(
+    { action: "rename", name: el("storeName")?.value || "" },
+    result => `Store renamed to ${result.name}`,
+  );
+}
+
+function maybePollStore() {
+  if (!STATE.user || !STATE.store?.owned || storeRefreshQueued || workRefreshQueued) return;
+  const now = Date.now();
+  if (now - lastStorePollAt < 30000) return;
+  storeRefreshQueued = true;
+  loadState().finally(() => { storeRefreshQueued = false; });
 }
 
 function renderWorkQuest() {
@@ -999,4 +1245,5 @@ setInterval(() => {
   renderClock();
   renderWorkQuest();
   maybePollWorkQuest();
+  maybePollStore();
 }, 1000);

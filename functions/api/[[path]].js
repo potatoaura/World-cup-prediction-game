@@ -79,6 +79,7 @@ const MARKET_TICK_SECONDS = 45;
 const MARKET_HISTORY_POINTS = 20;
 const MARKET_MIN_BASE_RATIO = 0.12;
 const DEFAULT_DAY_LENGTH_SECONDS = 600;
+const DEFAULT_STORE_SALE_TICK_SECONDS = 30;
 const HUNGER_DECAY_PER_DAY = 18;
 const THIRST_DECAY_PER_DAY = 24;
 
@@ -283,6 +284,74 @@ const PROPERTY_LISTINGS = [
   },
 ];
 
+const STORE_PREMISES = [
+  {
+    id: "street_kiosk",
+    name: "Street Kiosk",
+    area: "Stadium Gate",
+    price: 25000,
+    capacity: 30,
+    traffic: 0.30,
+    prestige: 1,
+    description: "Small first business with matchday foot traffic and low running costs.",
+  },
+  {
+    id: "corner_store",
+    name: "Corner Store",
+    area: "Market Street",
+    price: 100000,
+    capacity: 70,
+    traffic: 0.46,
+    prestige: 2,
+    description: "A proper neighborhood shop with room for several product lines.",
+  },
+  {
+    id: "market_hall",
+    name: "Market Hall Unit",
+    area: "Central Market",
+    price: 350000,
+    capacity: 160,
+    traffic: 0.66,
+    prestige: 4,
+    description: "Large retail floor in a busy indoor market with strong daily demand.",
+  },
+  {
+    id: "city_supermarket",
+    name: "City Supermarket",
+    area: "Financial Plaza",
+    price: 1000000,
+    capacity: 360,
+    traffic: 0.88,
+    prestige: 7,
+    description: "Flagship supermarket with the highest traffic, capacity, and status.",
+  },
+];
+
+const STORE_PRODUCTS = [
+  { id: "bread", name: "Fresh Bread", wholesale: 4, basePrice: 9, demand: 10, fixture: "shelves", fixtureLevel: 1, color: "gold" },
+  { id: "chips", name: "Matchday Chips", wholesale: 5, basePrice: 12, demand: 9, fixture: "shelves", fixtureLevel: 1, color: "red" },
+  { id: "fruit", name: "Fruit Box", wholesale: 7, basePrice: 16, demand: 7, fixture: "shelves", fixtureLevel: 1, color: "green" },
+  { id: "coffee", name: "Premium Coffee", wholesale: 9, basePrice: 21, demand: 6, fixture: "shelves", fixtureLevel: 2, color: "brown" },
+  { id: "water", name: "Cold Water", wholesale: 3, basePrice: 8, demand: 11, fixture: "fridges", fixtureLevel: 1, color: "blue" },
+  { id: "pizza", name: "Fresh Pizza", wholesale: 13, basePrice: 31, demand: 7, fixture: "fridges", fixtureLevel: 1, color: "red" },
+  { id: "sushi", name: "Sushi Tray", wholesale: 18, basePrice: 44, demand: 5, fixture: "fridges", fixtureLevel: 2, color: "green" },
+  { id: "steak", name: "Prime Steak", wholesale: 26, basePrice: 64, demand: 3, fixture: "fridges", fixtureLevel: 3, color: "gold" },
+];
+
+const STORE_EQUIPMENT = [
+  { id: "shelves", name: "Display Shelves", baseCost: 3000, maxLevel: 6, capacity: 25, description: "Unlock dry goods and add 25 storage slots per level." },
+  { id: "fridges", name: "Refrigerator", baseCost: 9000, maxLevel: 3, capacity: 20, description: "Unlock chilled products and add 20 storage slots per level." },
+  { id: "checkouts", name: "Checkout Counter", baseCost: 7500, maxLevel: 3, capacity: 0, description: "Serve customers faster and increase store traffic." },
+  { id: "signage", name: "Store Signage", baseCost: 5000, maxLevel: 3, capacity: 0, description: "Bring more people in from the street." },
+];
+
+const STORE_MARKUPS = [
+  { value: 0.85, label: "Budget", demand: 1.18 },
+  { value: 1, label: "Regular", demand: 1 },
+  { value: 1.2, label: "High", demand: 0.82 },
+  { value: 1.45, label: "Premium", demand: 0.62 },
+];
+
 function initialMarketTickOffset(symbol) {
   const hash = [...symbol].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
   return 5 + (hash % Math.max(1, MARKET_TICK_SECONDS - 10));
@@ -306,6 +375,7 @@ export async function onRequest(context) {
   const minWorkWaitSeconds = positiveEnvInt(env.WORK_WAIT_MIN_SECONDS, 120);
   const maxWorkWaitSeconds = Math.max(minWorkWaitSeconds, positiveEnvInt(env.WORK_WAIT_MAX_SECONDS, 600));
   const dayLengthSeconds = positiveEnvInt(env.DAY_LENGTH_SECONDS, DEFAULT_DAY_LENGTH_SECONDS);
+  const storeSaleTickSeconds = positiveEnvInt(env.STORE_SALE_TICK_SECONDS, DEFAULT_STORE_SALE_TICK_SECONDS);
   const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax${url.protocol === "https:" ? "; Secure" : ""}`;
 
   const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
@@ -561,6 +631,225 @@ export async function onRequest(context) {
     const rows = await DB.prepare("SELECT property_id FROM owned_properties WHERE user_id = ? AND rented_out = 1")
       .bind(userId).all();
     return rows.results.reduce((sum, row) => sum + Number(propertyListing(row.property_id)?.income || 0), 0);
+  }
+
+  function storePremises(premisesId) {
+    const key = housingKey(premisesId);
+    return STORE_PREMISES.find(premises => premises.id === key) || null;
+  }
+
+  function storeProduct(productId) {
+    const key = housingKey(productId);
+    return STORE_PRODUCTS.find(product => product.id === key) || null;
+  }
+
+  function storeEquipment(equipmentId) {
+    const key = housingKey(equipmentId);
+    return STORE_EQUIPMENT.find(equipment => equipment.id === key) || null;
+  }
+
+  function storeMarkup(value) {
+    const number = Number(value);
+    return STORE_MARKUPS.find(markup => Math.abs(markup.value - number) < 0.001) || null;
+  }
+
+  function storeEquipmentCost(equipment, currentLevel) {
+    return equipment.baseCost * (Number(currentLevel || 0) + 1);
+  }
+
+  function storeCapacity(store, premises) {
+    return Number(premises?.capacity || 0)
+      + Number(store?.shelves || 0) * 25
+      + Number(store?.fridges || 0) * 20;
+  }
+
+  function storeSalePrice(product, markupValue) {
+    return Math.max(product.wholesale + 1, Math.round(product.basePrice * Number(markupValue || 1)));
+  }
+
+  function storeProductUnlocked(product, store) {
+    return Number(store?.[product.fixture] || 0) >= product.fixtureLevel;
+  }
+
+  async function processStoreSales(userId) {
+    const store = await DB.prepare("SELECT * FROM retail_stores WHERE user_id = ?").bind(userId).first();
+    if (!store) return null;
+
+    const current = nowSeconds();
+    const lastSalesAt = Number(store.last_sales_at || current);
+    const elapsedTicks = Math.floor(Math.max(0, current - lastSalesAt) / storeSaleTickSeconds);
+    const ticks = Math.min(720, elapsedTicks);
+    if (ticks < 1) return store;
+    const processedAt = lastSalesAt + ticks * storeSaleTickSeconds;
+    const premises = storePremises(store.premises_id);
+    const markup = storeMarkup(store.markup) || STORE_MARKUPS[1];
+    const stockRows = await DB.prepare("SELECT product_id, quantity FROM store_stock WHERE user_id = ? AND quantity > 0")
+      .bind(userId).all();
+    const quantities = Object.fromEntries(stockRows.results.map(row => [row.product_id, Number(row.quantity)]));
+    const available = STORE_PRODUCTS.filter(product => quantities[product.id] > 0 && storeProductUnlocked(product, store));
+    const totalStock = available.reduce((sum, product) => sum + quantities[product.id], 0);
+    if (!premises || totalStock < 1) {
+      await DB.prepare("UPDATE retail_stores SET last_sales_at = ? WHERE user_id = ?")
+        .bind(processedAt, userId).run();
+      return { ...store, last_sales_at: processedAt };
+    }
+
+    const traffic = clamp(
+      (premises.traffic + Number(store.signage || 0) * 0.07 + Number(store.checkouts || 0) * 0.05
+        + Number(store.reputation || 50) / 500) * markup.demand,
+      0.08,
+      0.98,
+    );
+    const customerCount = Math.min(totalStock, Math.floor(ticks * traffic));
+    if (customerCount < 1) {
+      await DB.prepare("UPDATE retail_stores SET last_sales_at = ? WHERE user_id = ?")
+        .bind(processedAt, userId).run();
+      return { ...store, last_sales_at: processedAt };
+    }
+
+    const sold = {};
+    let revenue = 0;
+    let served = 0;
+    for (let index = 0; index < customerCount; index++) {
+      const choices = available.filter(product => quantities[product.id] > 0);
+      if (!choices.length) break;
+      const totalWeight = choices.reduce((sum, product) => sum + product.demand * Math.min(4, quantities[product.id]), 0);
+      let roll = Math.random() * totalWeight;
+      let selected = choices[0];
+      for (const product of choices) {
+        roll -= product.demand * Math.min(4, quantities[product.id]);
+        if (roll <= 0) {
+          selected = product;
+          break;
+        }
+      }
+      quantities[selected.id] -= 1;
+      sold[selected.id] = (sold[selected.id] || 0) + 1;
+      revenue += storeSalePrice(selected, markup.value);
+      served += 1;
+    }
+
+    if (served < 1) {
+      await DB.prepare("UPDATE retail_stores SET last_sales_at = ? WHERE user_id = ?")
+        .bind(processedAt, userId).run();
+      return { ...store, last_sales_at: processedAt };
+    }
+
+    const statements = [
+      DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(revenue, userId),
+      DB.prepare(`
+        UPDATE retail_stores
+        SET lifetime_revenue = lifetime_revenue + ?, customers_served = customers_served + ?,
+          reputation = MIN(100, reputation + ?), last_sales_at = ?
+        WHERE user_id = ?
+      `).bind(revenue, served, Math.floor(served / 25), processedAt, userId),
+      DB.prepare("DELETE FROM store_sales WHERE user_id = ? AND created_at < ?")
+        .bind(userId, current - 30 * 24 * 60 * 60),
+    ];
+    for (const [productId, quantity] of Object.entries(sold)) {
+      const product = storeProduct(productId);
+      const unitPrice = storeSalePrice(product, markup.value);
+      statements.push(
+        DB.prepare("UPDATE store_stock SET quantity = MAX(0, quantity - ?) WHERE user_id = ? AND product_id = ?")
+          .bind(quantity, userId, productId),
+        DB.prepare(`
+          INSERT INTO store_sales (id, user_id, product_id, quantity, unit_price, revenue, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(crypto.randomUUID(), userId, productId, quantity, unitPrice, unitPrice * quantity, current),
+      );
+    }
+    await DB.batch(statements);
+    return await DB.prepare("SELECT * FROM retail_stores WHERE user_id = ?").bind(userId).first();
+  }
+
+  async function storeState(userId) {
+    await processStoreSales(userId);
+    const store = await DB.prepare("SELECT * FROM retail_stores WHERE user_id = ?").bind(userId).first();
+    const premisesListings = STORE_PREMISES.map(premises => ({ ...premises }));
+    if (!store) {
+      return {
+        owned: false,
+        premisesListings,
+        equipment: STORE_EQUIPMENT.map(item => ({ ...item, level: 0, nextCost: item.baseCost })),
+        markupOptions: STORE_MARKUPS.map(item => ({ value: item.value, label: item.label })),
+      };
+    }
+
+    const [stockRows, salesRows, todayRow] = await Promise.all([
+      DB.prepare("SELECT product_id, quantity FROM store_stock WHERE user_id = ? ORDER BY product_id").bind(userId).all(),
+      DB.prepare(`
+        SELECT product_id, quantity, unit_price, revenue, created_at
+        FROM store_sales
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 12
+      `).bind(userId).all(),
+      DB.prepare("SELECT COALESCE(SUM(revenue), 0) AS revenue FROM store_sales WHERE user_id = ? AND created_at >= ?")
+        .bind(userId, nowSeconds() - 24 * 60 * 60).first(),
+    ]);
+    const stock = Object.fromEntries(stockRows.results.map(row => [row.product_id, Number(row.quantity)]));
+    const premises = storePremises(store.premises_id) || STORE_PREMISES[0];
+    const capacity = storeCapacity(store, premises);
+    const stockUsed = Object.values(stock).reduce((sum, quantity) => sum + Number(quantity), 0);
+    const markup = storeMarkup(store.markup) || STORE_MARKUPS[1];
+    const unlockedProducts = STORE_PRODUCTS.filter(product => storeProductUnlocked(product, store));
+    const averageProfit = unlockedProducts.length
+      ? unlockedProducts.reduce((sum, product) => sum + storeSalePrice(product, markup.value) - product.wholesale, 0) / unlockedProducts.length
+      : 0;
+    const traffic = clamp(
+      (premises.traffic + Number(store.signage || 0) * 0.07 + Number(store.checkouts || 0) * 0.05
+        + Number(store.reputation || 50) / 500) * markup.demand,
+      0.08,
+      0.98,
+    );
+    const hasFixtures = Number(store.shelves || 0) + Number(store.fridges || 0) > 0;
+    const status = !hasFixtures ? "setup" : stockUsed < 1 ? "out_of_stock" : "open";
+
+    return {
+      owned: true,
+      name: store.name,
+      premises,
+      premisesListings,
+      markup: markup.value,
+      markupLabel: markup.label,
+      markupOptions: STORE_MARKUPS.map(item => ({ value: item.value, label: item.label })),
+      status,
+      capacity,
+      stockUsed,
+      reputation: Number(store.reputation || 50),
+      lifetimeRevenue: Number(store.lifetime_revenue || 0),
+      customersServed: Number(store.customers_served || 0),
+      todayRevenue: Number(todayRow?.revenue || 0),
+      projectedHourlyProfit: Math.round((3600 / storeSaleTickSeconds) * traffic * averageProfit),
+      nextSaleIn: Math.max(0, Number(store.last_sales_at || 0) + storeSaleTickSeconds - nowSeconds()),
+      equipment: STORE_EQUIPMENT.map(item => {
+        const level = Number(store[item.id] || 0);
+        return {
+          ...item,
+          level,
+          maxed: level >= item.maxLevel,
+          nextCost: level >= item.maxLevel ? null : storeEquipmentCost(item, level),
+        };
+      }),
+      products: STORE_PRODUCTS.map(product => {
+        const salePrice = storeSalePrice(product, markup.value);
+        return {
+          ...product,
+          stock: Number(stock[product.id] || 0),
+          unlocked: storeProductUnlocked(product, store),
+          salePrice,
+          unitProfit: salePrice - product.wholesale,
+        };
+      }),
+      recentSales: salesRows.results.map(sale => ({
+        productId: sale.product_id,
+        productName: storeProduct(sale.product_id)?.name || sale.product_id,
+        quantity: Number(sale.quantity),
+        unitPrice: Number(sale.unit_price),
+        revenue: Number(sale.revenue),
+        createdAt: Number(sale.created_at),
+      })),
+    };
   }
 
   async function userById(userId) {
@@ -887,6 +1176,8 @@ export async function onRequest(context) {
   if (user) user = await applyAutomaticDays(user);
 
   if (path === "/state") {
+    const store = user ? await storeState(user.id) : null;
+    if (user) user = await userById(user.id);
     const leaders = await DB.prepare(`
       SELECT username, wallet, bank, score, rating
       FROM users
@@ -905,6 +1196,7 @@ export async function onRequest(context) {
       response.activeQuest = publicWorkQuest(await activeWorkQuest(user.id));
       response.market = await marketState(user.id);
       response.properties = await propertyState(user.id);
+      response.store = store;
     }
     if (user?.is_admin) response.adminUsers = await adminUsers();
     return json(response);
@@ -1198,6 +1490,92 @@ export async function onRequest(context) {
     }
 
     return json({ error: "Bad property action" }, 400);
+  }
+
+  if (path === "/store" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+    let store = await DB.prepare("SELECT * FROM retail_stores WHERE user_id = ?").bind(user.id).first();
+
+    if (action === "buyPremises") {
+      if (store) return json({ error: "You already own a store" }, 400);
+      const premises = storePremises(data.premisesId);
+      if (!premises) return json({ error: "Premises not found" }, 404);
+      if (premises.price > user.wallet) return json({ error: `Need ${premises.price} wallet to buy premises` }, 400);
+      const createdAt = nowSeconds();
+      const defaultName = `${String(user.username).slice(0, 18)} Market`;
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(premises.price, user.id),
+        DB.prepare(`
+          INSERT INTO retail_stores (user_id, premises_id, name, last_sales_at, created_at)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(user.id, premises.id, defaultName, createdAt, createdAt),
+      ]);
+      return json({ ok: true, action, store: await storeState(user.id) });
+    }
+
+    if (!store) return json({ error: "Buy premises first" }, 400);
+    await processStoreSales(user.id);
+    store = await DB.prepare("SELECT * FROM retail_stores WHERE user_id = ?").bind(user.id).first();
+    const freshUser = await userById(user.id);
+
+    if (action === "buyEquipment") {
+      const equipment = storeEquipment(data.equipmentId);
+      if (!equipment) return json({ error: "Equipment not found" }, 404);
+      const level = Number(store[equipment.id] || 0);
+      if (level >= equipment.maxLevel) return json({ error: "Equipment already maxed" }, 400);
+      const cost = storeEquipmentCost(equipment, level);
+      if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet for equipment` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(cost, user.id),
+        DB.prepare(`UPDATE retail_stores SET ${equipment.id} = ${equipment.id} + 1 WHERE user_id = ?`).bind(user.id),
+      ]);
+      return json({ ok: true, action, equipmentId: equipment.id, cost, store: await storeState(user.id) });
+    }
+
+    if (action === "restock") {
+      const product = storeProduct(data.productId);
+      if (!product) return json({ error: "Supplier product not found" }, 404);
+      if (!storeProductUnlocked(product, store)) {
+        return json({ error: `Need ${product.fixture} level ${product.fixtureLevel}` }, 400);
+      }
+      const quantity = clamp(money(data.quantity || 1), 1, 100);
+      const stockRows = await DB.prepare("SELECT quantity FROM store_stock WHERE user_id = ?").bind(user.id).all();
+      const used = stockRows.results.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+      const premises = storePremises(store.premises_id);
+      const availableCapacity = Math.max(0, storeCapacity(store, premises) - used);
+      if (quantity > availableCapacity) return json({ error: `Only ${availableCapacity} storage slots available` }, 400);
+      const cost = product.wholesale * quantity;
+      if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet for stock` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(cost, user.id),
+        DB.prepare(`
+          INSERT INTO store_stock (user_id, product_id, quantity)
+          VALUES (?, ?, ?)
+          ON CONFLICT(user_id, product_id) DO UPDATE SET quantity = quantity + excluded.quantity
+        `).bind(user.id, product.id, quantity),
+      ]);
+      return json({ ok: true, action, productId: product.id, quantity, cost, store: await storeState(user.id) });
+    }
+
+    if (action === "setMarkup") {
+      const markup = storeMarkup(data.markup);
+      if (!markup) return json({ error: "Bad markup option" }, 400);
+      await DB.prepare("UPDATE retail_stores SET markup = ? WHERE user_id = ?")
+        .bind(markup.value, user.id).run();
+      return json({ ok: true, action, markup: markup.value, store: await storeState(user.id) });
+    }
+
+    if (action === "rename") {
+      const name = String(data.name || "").trim().replace(/\s+/g, " ");
+      if (name.length < 3 || name.length > 28 || !/^[\p{L}\p{N} '.-]+$/u.test(name)) {
+        return json({ error: "Store name must be 3-28 letters or numbers" }, 400);
+      }
+      await DB.prepare("UPDATE retail_stores SET name = ? WHERE user_id = ?").bind(name, user.id).run();
+      return json({ ok: true, action, name, store: await storeState(user.id) });
+    }
+
+    return json({ error: "Bad store action" }, 400);
   }
 
   if (path.startsWith("/market/") && request.method === "GET") {
@@ -1529,6 +1907,43 @@ async function ensureRuntimeTables(DB) {
       )
     `),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_owned_properties_user ON owned_properties(user_id)"),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS retail_stores (
+        user_id TEXT PRIMARY KEY,
+        premises_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        markup REAL NOT NULL DEFAULT 1,
+        shelves INTEGER NOT NULL DEFAULT 0,
+        fridges INTEGER NOT NULL DEFAULT 0,
+        checkouts INTEGER NOT NULL DEFAULT 0,
+        signage INTEGER NOT NULL DEFAULT 0,
+        reputation INTEGER NOT NULL DEFAULT 50,
+        lifetime_revenue INTEGER NOT NULL DEFAULT 0,
+        customers_served INTEGER NOT NULL DEFAULT 0,
+        last_sales_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS store_stock (
+        user_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(user_id, product_id)
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS store_sales (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        unit_price INTEGER NOT NULL,
+        revenue INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_store_sales_user_created ON store_sales(user_id, created_at)"),
     DB.prepare(`
       CREATE TABLE IF NOT EXISTS market_assets (
         symbol TEXT PRIMARY KEY,
