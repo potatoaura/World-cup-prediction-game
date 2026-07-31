@@ -1,4 +1,4 @@
-let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null };
+let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null, city: null };
 let wheelRotation = 0;
 let ballRotation = 0;
 let rouletteBusy = false;
@@ -16,6 +16,8 @@ let propertyListingsOpen = false;
 let storeLocationsOpen = false;
 let activeStoreId = "";
 let activeStoreProductId = "";
+let cityMapOpen = false;
+let activeCityView = "hq";
 
 const MARKET_DETAIL_RANGES = [
   { id: "5m", label: "5M", seconds: 5 * 60 },
@@ -79,7 +81,7 @@ async function loadState() {
     lastStorePollAt = Date.now();
     hideError();
   } catch (error) {
-    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null };
+    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null, city: null };
     showError(`API error: ${error.message}`);
   }
   render();
@@ -128,8 +130,214 @@ function render() {
   renderWorkQuest();
   renderMarket();
   renderMarketDetail();
+  renderCity();
   renderClock();
   drawWheel();
+}
+
+function cityCountdown(seconds) {
+  const left = Math.max(0, Number(seconds || 0) - Math.floor(Date.now() / 1000) - serverClockOffsetSeconds);
+  const minutes = Math.floor(left / 60);
+  return `${minutes}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
+}
+
+function cityStoreOptions(selected = "") {
+  return (STATE.city?.stores || []).map(store => `
+    <option value="${esc(store.id)}" ${store.id === selected ? "selected" : ""}>${esc(store.name)}</option>
+  `).join("");
+}
+
+function openCityMap() {
+  if (!STATE.user) return;
+  cityMapOpen = true;
+  document.body.classList.add("cityOpen");
+  renderCity();
+}
+
+function closeCityMap() {
+  cityMapOpen = false;
+  document.body.classList.remove("cityOpen");
+  renderCity();
+}
+
+function selectCityView(view) {
+  activeCityView = view;
+  renderCity();
+}
+
+async function cityAction(action, payload = {}) {
+  try {
+    const result = await api("/api/city", { action, ...payload });
+    log(`City: ${action}`);
+    if (result.city) STATE.city = result.city;
+    if (result.store) STATE.store = result.store;
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function cityHqView(city) {
+  const stores = city.stores || [];
+  return `
+    <div class="cityViewHead"><small>CHAIN CONTROL</small><h3>${esc(city.profile.brandName)}</h3><p>Level ${city.profile.brandLevel} brand across ${stores.length} locations.</p></div>
+    <div class="cityKpis">
+      <span>Locations<b>${stores.length}</b></span>
+      <span>Brand level<b>${city.profile.brandLevel}/10</b></span>
+      <span>Insurance<b>${city.profile.insuranceUntil > Date.now() / 1000 ? cityCountdown(city.profile.insuranceUntil) : "Inactive"}</b></span>
+    </div>
+    <div class="cityControlRow">
+      <input id="cityBrandName" value="${esc(city.profile.brandName)}" maxlength="28" aria-label="Brand name">
+      <button onclick="cityAction('renameBrand',{name:el('cityBrandName').value})">Rename</button>
+      <button onclick="cityAction('upgradeBrand')" ${city.profile.nextBrandCost === null ? "disabled" : ""}>Upgrade ${city.profile.nextBrandCost ?? "MAX"}</button>
+    </div>
+    <div class="citySectionTitle"><b>Competitive map</b><span>Rivals reduce traffic; campaigns push back.</span></div>
+    <div class="cityList">${stores.length ? stores.map(store => `
+      <article class="cityRow">
+        <div><b>${esc(store.name)}</b><span>${esc(store.supplier.name)}</span></div>
+        <div class="cityRival"><small>RIVAL</small><strong>${esc(store.competitor.name)}</strong><span>-${Math.round(store.competitor.strength * 100)}% traffic pressure</span></div>
+        <div><small>CAMPAIGN</small><strong>${store.campaign ? esc(store.campaign.name) : "None"}</strong><span>${store.campaign ? `${cityCountdown(store.campaign.endsAt)} remaining` : "Start one at Supplier Row"}</span></div>
+      </article>
+    `).join("") : '<div class="cityEmpty">Buy a retail location on the main screen to build a chain.</div>'}</div>
+  `;
+}
+
+function citySuppliersView(city) {
+  return `
+    <div class="cityViewHead"><small>SUPPLY STREET</small><h3>Contracts and Campaigns</h3><p>Each location can use a different supplier and advertising plan.</p></div>
+    ${(city.stores || []).map(store => `
+      <section class="cityStoreContract">
+        <div class="citySectionTitle"><b>${esc(store.name)}</b><span>Current: ${esc(store.supplier.name)}</span></div>
+        <div class="supplierGrid">${city.suppliers.map(supplier => `
+          <button class="supplierChoice ${store.supplierId === supplier.id ? "active" : ""}" onclick="cityAction('setSupplier',{storeId:'${esc(store.id)}',supplierId:'${esc(supplier.id)}'})">
+            <b>${esc(supplier.name)}</b><span>${Math.round(supplier.priceFactor * 100)}% price | ${supplier.freshness}% freshness</span><small>${esc(supplier.description)}</small>
+          </button>
+        `).join("")}</div>
+        <div class="campaignStrip">${city.campaigns.map(campaign => `
+          <button onclick="cityAction('startCampaign',{storeId:'${esc(store.id)}',campaignId:'${esc(campaign.id)}'})">
+            <b>${esc(campaign.name)}</b><span>+${Math.round(campaign.trafficBonus * 100)}% | ${campaign.cost}</span>
+          </button>
+        `).join("")}</div>
+      </section>
+    `).join("") || '<div class="cityEmpty">No stores available.</div>'}
+  `;
+}
+
+function cityVehiclesView(city) {
+  const vehicle = city.vehicle;
+  return `
+    <div class="cityViewHead"><small>DELIVERY FLEET</small><h3>City Dealership</h3><p>Owned transport removes courier fees and moves larger warehouse loads.</p></div>
+    ${vehicle ? `<div class="fleetStatus"><div><small>ACTIVE VEHICLE</small><b>${esc(vehicle.name)}</b></div><span>Fuel <b>${vehicle.fuel}/${vehicle.fuelCapacity}</b></span><span>Condition <b>${vehicle.condition}%</b></span><span>Cargo <b>${vehicle.cargo}</b></span></div>
+      <div class="cityControlRow"><button onclick="cityAction('refuelVehicle')" ${vehicle.refuelCost < 1 ? "disabled" : ""}>Refuel ${vehicle.refuelCost}</button><button onclick="cityAction('repairVehicle')" ${vehicle.repairCost < 1 ? "disabled" : ""}>Repair ${vehicle.repairCost}</button></div>` : '<div class="cityEmpty">No vehicle. Couriers charge for every warehouse trip.</div>'}
+    <div class="vehicleGrid">${city.vehicles.map(item => `
+      <article class="vehicleCard ${item.owned ? "owned" : ""}">
+        <div class="vehicleShape"><i></i><i></i><span>${item.id === "scooter" ? "S" : item.id === "cargo_van" ? "VAN" : "EV"}</span></div>
+        <b>${esc(item.name)}</b><span>Cargo ${item.cargo} | Fuel ${item.fuelCapacity}</span>
+        <button onclick="cityAction('buyVehicle',{vehicleId:'${item.id}'})" ${item.owned ? "disabled" : ""}>${item.owned ? "Active" : `Buy ${item.price}`}</button>
+      </article>
+    `).join("")}</div>
+  `;
+}
+
+function cityWarehouseView(city) {
+  const warehouse = city.warehouse;
+  const productOptions = warehouse.products.map(product => `<option value="${product.id}">${esc(product.name)} (${product.wholesale})</option>`).join("");
+  return `
+    <div class="cityViewHead"><small>LOGISTICS</small><h3>${esc(warehouse.name)}</h3><p>${warehouse.used}/${warehouse.capacity} storage slots used.</p></div>
+    <div class="warehouseMeter"><i style="width:${warehouse.capacity ? Math.min(100, warehouse.used / warehouse.capacity * 100) : 0}%"></i></div>
+    <button class="cityWideAction" onclick="cityAction('upgradeWarehouse')" ${!warehouse.next ? "disabled" : ""}>${warehouse.next ? `Upgrade to ${esc(warehouse.next.name)} for ${warehouse.cost}` : "Warehouse maxed"}</button>
+    ${warehouse.capacity ? `
+      <div class="citySectionTitle"><b>Inbound order</b><span>Supplier freshness applies to the full batch.</span></div>
+      <div class="cityControlRow warehouseOrder">
+        <select id="warehouseProduct">${productOptions}</select>
+        <select id="warehouseSupplier">${city.suppliers.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join("")}</select>
+        <input id="warehouseQty" type="number" value="20" min="1" max="500" aria-label="Quantity">
+        <button onclick="cityAction('buyWarehouseStock',{productId:el('warehouseProduct').value,supplierId:el('warehouseSupplier').value,quantity:Number(el('warehouseQty').value)})">Order</button>
+      </div>
+      <div class="citySectionTitle"><b>Warehouse inventory</b><span>Send goods to any unlocked store fixture.</span></div>
+      <div class="cityList">${warehouse.stock.length ? warehouse.stock.map(item => `
+        <article class="warehouseRow">
+          <div><b>${esc(item.name)}</b><span>${item.quantity} units | ${item.freshness}% fresh</span></div>
+          <select id="transferStore-${esc(item.productId)}">${cityStoreOptions()}</select>
+          <input id="transferQty-${esc(item.productId)}" type="number" value="5" min="1" max="${item.quantity}" aria-label="Transfer quantity">
+          <button onclick="cityAction('transferWarehouseStock',{storeId:el('transferStore-${esc(item.productId)}').value,productId:'${esc(item.productId)}',quantity:Number(el('transferQty-${esc(item.productId)}').value)})" ${(city.stores || []).length ? "" : "disabled"}>Deliver</button>
+        </article>
+      `).join("") : '<div class="cityEmpty">The warehouse is empty.</div>'}</div>
+    ` : ""}
+  `;
+}
+
+function cityAuctionView(city) {
+  return `
+    <div class="cityViewHead"><small>LIVE PROPERTY SALES</small><h3>Auction House</h3><p>Your bid is held until another player outbids you or the auction settles.</p></div>
+    <div class="auctionGrid">${city.auctions.map(auction => `
+      <article class="auctionCard ${auction.leading ? "leading" : ""}">
+        <div class="auctionClock">${cityCountdown(auction.endsAt)}</div>
+        <small>ROUND ${auction.round}</small><h4>${esc(auction.property?.name || "Property")}</h4>
+        <p>${esc(auction.property?.area || "City")}, floor ${auction.property?.floor || 1}</p>
+        <span>Current bid <b>${auction.currentBid}</b></span>
+        <input id="bid-${esc(auction.id)}" type="number" value="${auction.minimumBid}" min="${auction.minimumBid}" aria-label="Bid amount">
+        <button onclick="cityAction('auctionBid',{auctionId:'${esc(auction.id)}',amount:Number(el('bid-${esc(auction.id)}').value)})">${auction.leading ? "Raise bid" : "Place bid"}</button>
+      </article>
+    `).join("")}</div>
+  `;
+}
+
+function cityBlackMarketView(city) {
+  const market = city.blackMarket;
+  return `
+    <div class="cityViewHead night"><small>UNLICENSED TRADING</small><h3>Night Market</h3><p>Stock rotates in ${cityCountdown(market.endsAt)}. Quantities are limited per player.</p></div>
+    <div class="blackMarketGrid">${market.offers.map(item => `
+      <article class="blackOffer"><small>${item.remaining} LEFT</small><b>${esc(item.name)}</b><p>${esc(item.description)}</p><button onclick="cityAction('blackMarketBuy',{itemId:'${item.id}'})" ${item.remaining < 1 ? "disabled" : ""}>Buy ${item.price}</button></article>
+    `).join("")}</div>
+    <div class="citySectionTitle"><b>Street inventory</b><span>Store items require a target location.</span></div>
+    <div class="cityList">${market.inventory.length ? market.inventory.map(item => `
+      <article class="inventoryRow"><div><b>${esc(item.name || item.id)}</b><span>Quantity ${item.quantity}</span></div>
+      ${["repair_kit", "camera_kit"].includes(item.id) ? `<select id="itemStore-${item.id}">${cityStoreOptions()}</select>` : ""}
+      <button onclick="cityAction('useBlackMarketItem',{itemId:'${item.id}',storeId:el('itemStore-${item.id}')?.value||''})">Use</button></article>
+    `).join("") : '<div class="cityEmpty">No items in street inventory.</div>'}</div>
+  `;
+}
+
+function cityNewsView(city) {
+  const news = city.news;
+  const productNames = news.products.map(id => city.warehouse.products.find(item => item.id === id)?.name || id);
+  return `
+    <div class="cityViewHead"><small>LIVE CITY FEED</small><h3>${esc(news.title)}</h3><p>${esc(news.description)}</p></div>
+    <div class="newsBroadcast"><div class="newsSignal">LIVE</div><strong>${Math.round(news.multiplier * 100)}%</strong><span>${productNames.length ? `Demand for ${esc(productNames.join(", "))}` : "Normal demand across all categories"}</span><small>Next bulletin in ${cityCountdown(news.endsAt)}</small></div>
+    <div class="citySectionTitle"><b>Business effect</b><span>News changes which stocked products customers choose.</span></div>
+    <div class="cityList">${(city.stores || []).map(store => `<article class="cityRow"><div><b>${esc(store.name)}</b><span>${productNames.length ? "Stock the trending products to benefit" : "No special category today"}</span></div><strong>${store.campaign ? `Campaign +${Math.round(store.campaign.trafficBonus * 100)}%` : "No campaign"}</strong></article>`).join("")}</div>
+  `;
+}
+
+function renderCity() {
+  const overlay = el("cityOverlay");
+  const body = el("cityPanelBody");
+  if (!overlay || !body) return;
+  overlay.classList.toggle("hidden", !cityMapOpen || !STATE.user);
+  if (!cityMapOpen || !STATE.user) return;
+  const city = STATE.city;
+  if (!city) {
+    body.innerHTML = '<div class="cityEmpty">Loading city...</div>';
+    return;
+  }
+  el("cityWallet").textContent = `Wallet ${STATE.user.wallet}`;
+  el("cityTicker").innerHTML = `<b>LIVE</b> ${esc(city.news.title)} <span>${esc(city.news.description)}</span>`;
+  const titles = { hq: "Chain HQ", suppliers: "Supplier Row", vehicles: "Dealership", warehouse: "Warehouse", auction: "Auction House", blackmarket: "Night Market", news: "City News" };
+  el("cityTitle").textContent = titles[activeCityView] || "City Map";
+  const views = {
+    hq: cityHqView,
+    suppliers: citySuppliersView,
+    vehicles: cityVehiclesView,
+    warehouse: cityWarehouseView,
+    auction: cityAuctionView,
+    blackmarket: cityBlackMarketView,
+    news: cityNewsView,
+  };
+  body.innerHTML = (views[activeCityView] || cityHqView)(city);
+  document.querySelectorAll(".cityBuilding").forEach(button => {
+    button.classList.toggle("active", button.getAttribute("onclick")?.includes(`'${activeCityView}'`));
+  });
 }
 
 function renderLeaderboard() {
@@ -750,6 +958,8 @@ function renderStore() {
             <span>Sell <b>${product.salePrice}</b></span>
             <span>Profit <b>+${product.unitProfit}</b></span>
           </div>
+          <div class="freshnessLabel"><span>Freshness</span><b>${product.stock ? product.freshness : "-"}${product.stock ? "%" : ""}</b></div>
+          <div class="freshnessBar"><i style="width:${product.stock ? product.freshness : 0}%"></i></div>
           <div class="storeRestock">
             <input id="storeQty_${esc(product.id)}" type="number" value="10" min="1" max="100">
             <button onclick="restockStore('${esc(store.id)}','${esc(product.id)}')" ${product.unlocked ? "" : "disabled"}>

@@ -21,6 +21,7 @@
   </div>
   <div id="me" class="me hidden">
     <span id="meName"></span>
+    <button class="cityNavButton" onclick="openCityMap()">City Map</button>
     <button class="secondary" onclick="logout()">Logout</button>
   </div>
 </header>
@@ -233,6 +234,39 @@
       <div id="log"></div>
     </section>
   </aside>
+</div>
+
+<div id="cityOverlay" class="cityOverlay hidden">
+  <section class="cityShell">
+    <header class="cityTopbar">
+      <div>
+        <small>BUSINESS DISTRICT</small>
+        <h2 id="cityTitle">City Map</h2>
+      </div>
+      <div class="cityTopActions">
+        <span id="cityWallet">Wallet 0</span>
+        <button class="secondary" onclick="loadState()">Refresh</button>
+        <button class="secondary" onclick="closeCityMap()" aria-label="Close city map">Close</button>
+      </div>
+    </header>
+    <div class="cityTicker" id="cityTicker">City news loading...</div>
+    <div class="cityLayout">
+      <nav class="cityMap" aria-label="City locations">
+        <div class="cityRoad cityRoadA"></div>
+        <div class="cityRoad cityRoadB"></div>
+        <button class="cityBuilding cityHq" onclick="selectCityView('hq')"><i>HQ</i><b>Chain HQ</b><span>Brand and stores</span></button>
+        <button class="cityBuilding citySupplier" onclick="selectCityView('suppliers')"><i>SP</i><b>Supplier Row</b><span>Stock contracts</span></button>
+        <button class="cityBuilding cityDealer" onclick="selectCityView('vehicles')"><i>DV</i><b>Dealership</b><span>Delivery fleet</span></button>
+        <button class="cityBuilding cityWarehouse" onclick="selectCityView('warehouse')"><i>WH</i><b>Warehouse</b><span>Bulk logistics</span></button>
+        <button class="cityBuilding cityAuction" onclick="selectCityView('auction')"><i>AU</i><b>Auction House</b><span>Property bids</span></button>
+        <button class="cityBuilding cityBlackMarket" onclick="selectCityView('blackmarket')"><i>BM</i><b>Night Market</b><span>Rotating offers</span></button>
+        <button class="cityBuilding cityNews" onclick="selectCityView('news')"><i>CN</i><b>City News</b><span>Live demand</span></button>
+      </nav>
+      <aside class="cityPanel">
+        <div id="cityPanelBody"></div>
+      </aside>
+    </div>
+  </section>
 </div>
 
 <script src="/app.js"></script>

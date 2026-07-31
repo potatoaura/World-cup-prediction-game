@@ -159,6 +159,9 @@ CREATE TABLE IF NOT EXISTS player_stores (
   customers_served INTEGER NOT NULL DEFAULT 0,
   last_sales_at INTEGER NOT NULL,
   next_event_at INTEGER NOT NULL DEFAULT 0,
+  supplier_id TEXT NOT NULL DEFAULT 'local_coop',
+  campaign_type TEXT NOT NULL DEFAULT '',
+  campaign_until INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 
@@ -166,6 +169,8 @@ CREATE TABLE IF NOT EXISTS player_store_stock (
   store_id TEXT NOT NULL,
   product_id TEXT NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 0,
+  freshness INTEGER NOT NULL DEFAULT 100,
+  freshness_updated_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(store_id, product_id)
 );
 
@@ -196,6 +201,54 @@ CREATE TABLE IF NOT EXISTS store_incidents (
   choice_id TEXT,
   created_at INTEGER NOT NULL,
   resolved_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS city_profiles (
+  user_id TEXT PRIMARY KEY,
+  brand_name TEXT NOT NULL DEFAULT 'Independent Retail',
+  brand_level INTEGER NOT NULL DEFAULT 1,
+  vehicle_id TEXT NOT NULL DEFAULT '',
+  vehicle_fuel INTEGER NOT NULL DEFAULT 0,
+  vehicle_condition INTEGER NOT NULL DEFAULT 100,
+  warehouse_level INTEGER NOT NULL DEFAULT 0,
+  insurance_until INTEGER NOT NULL DEFAULT 0,
+  supplier_pass_until INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_stock (
+  user_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 0,
+  freshness INTEGER NOT NULL DEFAULT 100,
+  freshness_updated_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(user_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS city_inventory (
+  user_id TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(user_id, item_id)
+);
+
+CREATE TABLE IF NOT EXISTS black_market_purchases (
+  user_id TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  market_cycle INTEGER NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(user_id, item_id, market_cycle)
+);
+
+CREATE TABLE IF NOT EXISTS property_auctions (
+  id TEXT PRIMARY KEY,
+  property_id TEXT NOT NULL,
+  current_bid INTEGER NOT NULL,
+  bidder_id TEXT,
+  ends_at INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  round INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS market_assets (
@@ -252,6 +305,9 @@ CREATE INDEX IF NOT EXISTS idx_store_incidents_store_status ON store_incidents(s
 CREATE INDEX IF NOT EXISTS idx_store_incidents_user_created ON store_incidents(user_id, created_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_store_incidents_one_pending
   ON store_incidents(store_id) WHERE status IN ('pending', 'resolving');
+CREATE INDEX IF NOT EXISTS idx_warehouse_stock_user ON warehouse_stock(user_id);
+CREATE INDEX IF NOT EXISTS idx_black_market_cycle ON black_market_purchases(market_cycle);
+CREATE INDEX IF NOT EXISTS idx_property_auctions_ends ON property_auctions(status, ends_at);
 CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
 CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at);

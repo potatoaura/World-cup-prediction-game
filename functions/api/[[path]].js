@@ -575,20 +575,20 @@ const STORE_PREMISES = [
 ];
 
 const STORE_PRODUCTS = [
-  { id: "bread", name: "Fresh Bread", wholesale: 4, basePrice: 9, demand: 10, fixture: "shelves", fixtureLevel: 1, color: "gold" },
-  { id: "chips", name: "Matchday Chips", wholesale: 5, basePrice: 12, demand: 9, fixture: "shelves", fixtureLevel: 1, color: "red" },
-  { id: "fruit", name: "Fruit Box", wholesale: 7, basePrice: 16, demand: 7, fixture: "shelves", fixtureLevel: 1, color: "green" },
-  { id: "coffee", name: "Premium Coffee", wholesale: 9, basePrice: 21, demand: 6, fixture: "shelves", fixtureLevel: 2, color: "brown" },
-  { id: "water", name: "Cold Water", wholesale: 3, basePrice: 8, demand: 11, fixture: "fridges", fixtureLevel: 1, color: "blue" },
-  { id: "pizza", name: "Fresh Pizza", wholesale: 13, basePrice: 31, demand: 7, fixture: "fridges", fixtureLevel: 1, color: "red" },
-  { id: "sushi", name: "Sushi Tray", wholesale: 18, basePrice: 44, demand: 5, fixture: "fridges", fixtureLevel: 2, color: "green" },
-  { id: "steak", name: "Prime Steak", wholesale: 26, basePrice: 64, demand: 3, fixture: "fridges", fixtureLevel: 3, color: "gold" },
-  { id: "milk", name: "Farm Milk", wholesale: 5, basePrice: 13, demand: 8, fixture: "fridges", fixtureLevel: 1, color: "blue" },
-  { id: "energy_drink", name: "Energy Drink", wholesale: 7, basePrice: 18, demand: 9, fixture: "fridges", fixtureLevel: 1, color: "red" },
-  { id: "cheese", name: "Aged Cheese", wholesale: 10, basePrice: 25, demand: 6, fixture: "fridges", fixtureLevel: 2, color: "gold" },
-  { id: "ice_cream", name: "Ice Cream Box", wholesale: 12, basePrice: 30, demand: 7, fixture: "fridges", fixtureLevel: 2, color: "blue" },
-  { id: "noodles", name: "Spicy Noodles", wholesale: 6, basePrice: 15, demand: 7, fixture: "shelves", fixtureLevel: 2, color: "red" },
-  { id: "cake_box", name: "Rose Cake", wholesale: 16, basePrice: 39, demand: 5, fixture: "fridges", fixtureLevel: 3, color: "green" },
+  { id: "bread", name: "Fresh Bread", wholesale: 4, basePrice: 9, demand: 10, decay: 18, fixture: "shelves", fixtureLevel: 1, color: "gold" },
+  { id: "chips", name: "Matchday Chips", wholesale: 5, basePrice: 12, demand: 9, decay: 3, fixture: "shelves", fixtureLevel: 1, color: "red" },
+  { id: "fruit", name: "Fruit Box", wholesale: 7, basePrice: 16, demand: 7, decay: 15, fixture: "shelves", fixtureLevel: 1, color: "green" },
+  { id: "coffee", name: "Premium Coffee", wholesale: 9, basePrice: 21, demand: 6, decay: 4, fixture: "shelves", fixtureLevel: 2, color: "brown" },
+  { id: "water", name: "Cold Water", wholesale: 3, basePrice: 8, demand: 11, decay: 1, fixture: "fridges", fixtureLevel: 1, color: "blue" },
+  { id: "pizza", name: "Fresh Pizza", wholesale: 13, basePrice: 31, demand: 7, decay: 20, fixture: "fridges", fixtureLevel: 1, color: "red" },
+  { id: "sushi", name: "Sushi Tray", wholesale: 18, basePrice: 44, demand: 5, decay: 25, fixture: "fridges", fixtureLevel: 2, color: "green" },
+  { id: "steak", name: "Prime Steak", wholesale: 26, basePrice: 64, demand: 3, decay: 12, fixture: "fridges", fixtureLevel: 3, color: "gold" },
+  { id: "milk", name: "Farm Milk", wholesale: 5, basePrice: 13, demand: 8, decay: 18, fixture: "fridges", fixtureLevel: 1, color: "blue" },
+  { id: "energy_drink", name: "Energy Drink", wholesale: 7, basePrice: 18, demand: 9, decay: 2, fixture: "fridges", fixtureLevel: 1, color: "red" },
+  { id: "cheese", name: "Aged Cheese", wholesale: 10, basePrice: 25, demand: 6, decay: 8, fixture: "fridges", fixtureLevel: 2, color: "gold" },
+  { id: "ice_cream", name: "Ice Cream Box", wholesale: 12, basePrice: 30, demand: 7, decay: 10, fixture: "fridges", fixtureLevel: 2, color: "blue" },
+  { id: "noodles", name: "Spicy Noodles", wholesale: 6, basePrice: 15, demand: 7, decay: 3, fixture: "shelves", fixtureLevel: 2, color: "red" },
+  { id: "cake_box", name: "Rose Cake", wholesale: 16, basePrice: 39, demand: 5, decay: 16, fixture: "fridges", fixtureLevel: 3, color: "green" },
 ];
 
 const STORE_EQUIPMENT = [
@@ -662,6 +662,65 @@ const STORE_INCIDENTS = [
       { id: "decline", label: "Decline politely", detail: "No cost, -1 reputation", wallet: 0, reputation: -1, condition: 0 },
     ],
   },
+  {
+    id: "armed_robbery",
+    title: "Armed Robbery",
+    description: "A masked crew has entered the store and is trying to empty the tills.",
+    tone: "red",
+    choices: [
+      { id: "security_alarm", label: "Trigger silent alarm", detail: "+350 recovered, +4 reputation", requires: "security", wallet: 350, reputation: 4, condition: -2 },
+      { id: "protect_people", label: "Protect customers", detail: "Lose 900, +6 reputation", wallet: -900, reputation: 6, condition: -4, insurable: true },
+      { id: "chase_robbers", label: "Chase the crew", detail: "Lose 500 and heavy damage", wallet: -500, reputation: -3, condition: -14, insurable: true },
+    ],
+  },
+];
+
+const CITY_SUPPLIERS = [
+  { id: "local_coop", name: "Local Cooperative", priceFactor: 1, freshness: 95, demandBonus: 0.02, description: "Reliable local deliveries with balanced prices." },
+  { id: "budget_hub", name: "Budget Hub", priceFactor: 0.82, freshness: 76, demandBonus: -0.04, description: "Cheap bulk goods with shorter shelf life." },
+  { id: "premium_imports", name: "Premium Imports", priceFactor: 1.22, freshness: 100, demandBonus: 0.08, description: "Expensive products that attract premium customers." },
+];
+
+const CITY_CAMPAIGNS = [
+  { id: "flyers", name: "Street Flyers", cost: 500, duration: 600, trafficBonus: 0.08 },
+  { id: "radio", name: "City Radio", cost: 2500, duration: 900, trafficBonus: 0.16 },
+  { id: "takeover", name: "District Takeover", cost: 10000, duration: 1200, trafficBonus: 0.25 },
+];
+
+const CITY_VEHICLES = [
+  { id: "scooter", name: "Delivery Scooter", price: 25000, fuelCapacity: 60, tripFuel: 5, conditionLoss: 1, cargo: 60 },
+  { id: "cargo_van", name: "Cargo Van", price: 100000, fuelCapacity: 140, tripFuel: 9, conditionLoss: 2, cargo: 180 },
+  { id: "electric_truck", name: "Electric Truck", price: 400000, fuelCapacity: 260, tripFuel: 7, conditionLoss: 1, cargo: 500 },
+];
+
+const CITY_WAREHOUSES = [
+  { level: 0, name: "No warehouse", capacity: 0, cost: 50000 },
+  { level: 1, name: "Small Depot", capacity: 200, cost: 150000 },
+  { level: 2, name: "Distribution Center", capacity: 600, cost: 500000 },
+  { level: 3, name: "Automated Hub", capacity: 2000, cost: null },
+];
+
+const BLACK_MARKET_ITEMS = [
+  { id: "insurance_papers", name: "Insurance Papers", price: 8500, stock: 1, description: "Covers 70% of insured robbery losses for 30 minutes." },
+  { id: "rare_parts", name: "Rare Vehicle Parts", price: 4800, stock: 2, description: "Restores 30 vehicle condition." },
+  { id: "supplier_pass", name: "Supplier Pass", price: 6500, stock: 1, description: "Cuts supplier prices by 15% for 15 minutes." },
+  { id: "repair_kit", name: "Store Repair Kit", price: 4200, stock: 2, description: "Restores 20 condition at one store." },
+  { id: "camera_kit", name: "Camera Kit", price: 12000, stock: 1, description: "Adds one security level to a store." },
+];
+
+const CITY_NEWS = [
+  { id: "heatwave", title: "Heatwave across the city", description: "Cold drinks and ice cream are selling quickly.", products: ["water", "energy_drink", "ice_cream"], multiplier: 1.65 },
+  { id: "food_festival", title: "Central food festival opens", description: "Prepared food and desserts are in demand.", products: ["pizza", "sushi", "cake_box"], multiplier: 1.55 },
+  { id: "supply_strike", title: "Regional supply strike", description: "Shelf-stable products are attracting more buyers.", products: ["chips", "coffee", "noodles"], multiplier: 1.45 },
+  { id: "fitness_week", title: "City fitness week", description: "Fruit, water, and dairy have a temporary boost.", products: ["fruit", "water", "milk"], multiplier: 1.5 },
+  { id: "quiet_week", title: "Quiet trading week", description: "No product category has a special advantage.", products: [], multiplier: 1 },
+];
+
+const CITY_COMPETITORS = [
+  { premisesId: "food_cart", name: "Quick Bite Cart", strength: 0.05 },
+  { premisesId: "corner_store", name: "Metro Mini Mart", strength: 0.09 },
+  { premisesId: "market_hall", name: "Fresh Square", strength: 0.13 },
+  { premisesId: "city_supermarket", name: "Atlas Hypermarket", strength: 0.18 },
 ];
 
 const STORE_MARKUPS = [
@@ -1036,6 +1095,191 @@ export async function onRequest(context) {
     return missing * Math.max(20, Math.ceil(Number(premises?.price || 0) / 5000));
   }
 
+  function citySupplier(supplierId) {
+    return CITY_SUPPLIERS.find(item => item.id === housingKey(supplierId)) || CITY_SUPPLIERS[0];
+  }
+
+  function cityVehicle(vehicleId) {
+    return CITY_VEHICLES.find(item => item.id === housingKey(vehicleId)) || null;
+  }
+
+  function currentCityNews() {
+    const cycle = Math.floor(nowSeconds() / 300);
+    return { ...CITY_NEWS[cycle % CITY_NEWS.length], cycle, endsAt: (cycle + 1) * 300 };
+  }
+
+  function competitorForStore(store) {
+    return CITY_COMPETITORS.find(item => item.premisesId === store.premises_id) || CITY_COMPETITORS[0];
+  }
+
+  function campaignForStore(store) {
+    if (Number(store.campaign_until || 0) <= nowSeconds()) return null;
+    return CITY_CAMPAIGNS.find(item => item.id === store.campaign_type) || null;
+  }
+
+  async function ensureCityProfile(userId) {
+    await DB.prepare(`
+      INSERT OR IGNORE INTO city_profiles (user_id, created_at)
+      VALUES (?, ?)
+    `).bind(userId, nowSeconds()).run();
+    return await DB.prepare("SELECT * FROM city_profiles WHERE user_id = ?").bind(userId).first();
+  }
+
+  async function refreshStockFreshness(table, ownerColumn, ownerId) {
+    const rows = await DB.prepare(`
+      SELECT product_id, quantity, freshness, freshness_updated_at
+      FROM ${table} WHERE ${ownerColumn} = ? AND quantity > 0
+    `).bind(ownerId).all();
+    const current = nowSeconds();
+    const statements = [];
+    for (const row of rows.results) {
+      const product = storeProduct(row.product_id);
+      const updatedAt = Number(row.freshness_updated_at || current);
+      const elapsedDays = Math.floor(Math.max(0, current - updatedAt) / dayLengthSeconds);
+      if (!product || elapsedDays < 1) continue;
+      const freshness = Math.max(0, Number(row.freshness ?? 100) - elapsedDays * Number(product.decay || 1));
+      statements.push(DB.prepare(`
+        UPDATE ${table}
+        SET freshness = ?, freshness_updated_at = ?, quantity = CASE WHEN ? <= 0 THEN 0 ELSE quantity END
+        WHERE ${ownerColumn} = ? AND product_id = ?
+      `).bind(freshness, updatedAt + elapsedDays * dayLengthSeconds, freshness, ownerId, row.product_id));
+    }
+    if (statements.length) await DB.batch(statements);
+  }
+
+  function warehouseInfo(profile) {
+    return CITY_WAREHOUSES.find(item => item.level === Number(profile?.warehouse_level || 0)) || CITY_WAREHOUSES[0];
+  }
+
+  function weightedFreshness(currentQuantity, currentFreshness, addedQuantity, addedFreshness) {
+    const total = Number(currentQuantity || 0) + Number(addedQuantity || 0);
+    if (total < 1) return Number(addedFreshness || 100);
+    return Math.round((Number(currentQuantity || 0) * Number(currentFreshness || 100)
+      + Number(addedQuantity || 0) * Number(addedFreshness || 100)) / total);
+  }
+
+  async function ensureCityAuctions() {
+    const rows = await DB.prepare("SELECT * FROM property_auctions ORDER BY id").all();
+    const current = nowSeconds();
+    if (!rows.results.length) {
+      await DB.batch(PROPERTY_LISTINGS.slice(0, 4).map((listing, index) => DB.prepare(`
+        INSERT OR IGNORE INTO property_auctions
+          (id, property_id, current_bid, bidder_id, ends_at, status, round, updated_at)
+        VALUES (?, ?, ?, NULL, ?, 'active', 1, ?)
+      `).bind(`city-auction-${index + 1}`, listing.id, Math.round(listing.price * 0.7), current + 420 + index * 60, current)));
+      return;
+    }
+    for (const row of rows.results.filter(item => item.status === "active" && Number(item.ends_at) <= current)) {
+      const claimed = await DB.prepare(`
+        UPDATE property_auctions SET status = 'settling'
+        WHERE id = ? AND status = 'active' AND ends_at <= ? RETURNING *
+      `).bind(row.id, current).first();
+      if (!claimed) continue;
+      const listing = propertyListing(claimed.property_id);
+      const nextIndex = (PROPERTY_LISTINGS.findIndex(item => item.id === claimed.property_id) + 4) % PROPERTY_LISTINGS.length;
+      const next = PROPERTY_LISTINGS[nextIndex];
+      const statements = [];
+      if (claimed.bidder_id && listing) {
+        statements.push(DB.prepare(`
+          INSERT INTO owned_properties (id, user_id, property_id, rented_out, condition, created_at)
+          VALUES (?, ?, ?, 0, 100, ?)
+        `).bind(crypto.randomUUID(), claimed.bidder_id, listing.id, current));
+      }
+      statements.push(DB.prepare(`
+        UPDATE property_auctions
+        SET property_id = ?, current_bid = ?, bidder_id = NULL, ends_at = ?, status = 'active',
+          round = round + 1, updated_at = ? WHERE id = ?
+      `).bind(next.id, Math.round(next.price * 0.7), current + 600, current, claimed.id));
+      await DB.batch(statements);
+    }
+  }
+
+  async function cityState(userId) {
+    const profile = await ensureCityProfile(userId);
+    await ensureCityAuctions();
+    await refreshStockFreshness("warehouse_stock", "user_id", userId);
+    const [warehouseRows, inventoryRows, auctionRows, storeRows] = await Promise.all([
+      DB.prepare("SELECT * FROM warehouse_stock WHERE user_id = ? AND quantity > 0 ORDER BY product_id").bind(userId).all(),
+      DB.prepare("SELECT item_id, quantity FROM city_inventory WHERE user_id = ? AND quantity > 0 ORDER BY item_id").bind(userId).all(),
+      DB.prepare("SELECT * FROM property_auctions WHERE status = 'active' ORDER BY ends_at").all(),
+      DB.prepare("SELECT id, premises_id, name, supplier_id, campaign_type, campaign_until FROM player_stores WHERE user_id = ? ORDER BY created_at").bind(userId).all(),
+    ]);
+    const warehouse = warehouseInfo(profile);
+    const warehouseUsed = warehouseRows.results.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    const cycle = Math.floor(nowSeconds() / 600);
+    const offers = BLACK_MARKET_ITEMS
+      .map((item, index) => ({ item, sort: (cycle * 17 + index * 29) % 101 }))
+      .sort((a, b) => a.sort - b.sort)
+      .slice(0, 3);
+    const purchaseRows = await DB.prepare("SELECT item_id, quantity FROM black_market_purchases WHERE user_id = ? AND market_cycle = ?")
+      .bind(userId, cycle).all();
+    const purchased = Object.fromEntries(purchaseRows.results.map(row => [row.item_id, Number(row.quantity || 0)]));
+    const vehicle = cityVehicle(profile.vehicle_id);
+    return {
+      profile: {
+        brandName: profile.brand_name,
+        brandLevel: Number(profile.brand_level || 1),
+        nextBrandCost: Number(profile.brand_level || 1) >= 10 ? null : 50000 * Number(profile.brand_level || 1),
+        insuranceUntil: Number(profile.insurance_until || 0),
+        supplierPassUntil: Number(profile.supplier_pass_until || 0),
+      },
+      news: currentCityNews(),
+      suppliers: CITY_SUPPLIERS,
+      campaigns: CITY_CAMPAIGNS,
+      stores: storeRows.results.map(store => ({
+        id: store.id,
+        name: store.name,
+        supplierId: store.supplier_id,
+        supplier: citySupplier(store.supplier_id),
+        campaign: campaignForStore(store) ? { ...campaignForStore(store), endsAt: Number(store.campaign_until || 0) } : null,
+        competitor: competitorForStore(store),
+      })),
+      vehicles: CITY_VEHICLES.map(item => ({ ...item, owned: item.id === profile.vehicle_id })),
+      vehicle: vehicle ? {
+        ...vehicle,
+        fuel: Number(profile.vehicle_fuel || 0),
+        condition: Number(profile.vehicle_condition ?? 100),
+        refuelCost: Math.max(0, vehicle.fuelCapacity - Number(profile.vehicle_fuel || 0)) * 5,
+        repairCost: Math.max(0, 100 - Number(profile.vehicle_condition ?? 100)) * 180,
+      } : null,
+      warehouse: {
+        ...warehouse,
+        used: warehouseUsed,
+        next: CITY_WAREHOUSES.find(item => item.level === warehouse.level + 1) || null,
+        stock: warehouseRows.results.map(row => ({
+          productId: row.product_id,
+          name: storeProduct(row.product_id)?.name || row.product_id,
+          quantity: Number(row.quantity || 0),
+          freshness: Number(row.freshness ?? 100),
+        })),
+        products: STORE_PRODUCTS.map(product => ({ id: product.id, name: product.name, wholesale: product.wholesale })),
+      },
+      auctions: auctionRows.results.map(row => {
+        const listing = propertyListing(row.property_id);
+        return {
+          id: row.id,
+          property: listing ? publicPropertyListing(listing) : null,
+          currentBid: Number(row.current_bid || 0),
+          minimumBid: Number(row.current_bid || 0) + Math.max(1000, Math.ceil(Number(row.current_bid || 0) * 0.05)),
+          bidderId: row.bidder_id || "",
+          leading: row.bidder_id === userId,
+          endsAt: Number(row.ends_at || 0),
+          round: Number(row.round || 1),
+        };
+      }),
+      blackMarket: {
+        cycle,
+        endsAt: (cycle + 1) * 600,
+        offers: offers.map(({ item }) => ({ ...item, remaining: Math.max(0, item.stock - Number(purchased[item.id] || 0)) })),
+        inventory: inventoryRows.results.map(row => ({
+          ...BLACK_MARKET_ITEMS.find(item => item.id === row.item_id),
+          id: row.item_id,
+          quantity: Number(row.quantity || 0),
+        })),
+      },
+    };
+  }
+
   function pickStoreEventWaitSeconds() {
     if (fixedStoreEventWaitSeconds > 0) return fixedStoreEventWaitSeconds;
     return 120 + Math.floor(Math.random() * 181);
@@ -1098,10 +1342,12 @@ export async function onRequest(context) {
         .bind(processedAt, store.id).run();
       return { ...store, last_sales_at: processedAt };
     }
-    const stockRows = await DB.prepare("SELECT product_id, quantity FROM player_store_stock WHERE store_id = ? AND quantity > 0")
+    await refreshStockFreshness("player_store_stock", "store_id", store.id);
+    const stockRows = await DB.prepare("SELECT product_id, quantity, freshness FROM player_store_stock WHERE store_id = ? AND quantity > 0")
       .bind(store.id).all();
     const quantities = Object.fromEntries(stockRows.results.map(row => [row.product_id, Number(row.quantity)]));
-    const available = STORE_PRODUCTS.filter(product => quantities[product.id] > 0 && storeProductUnlocked(product, store));
+    const freshness = Object.fromEntries(stockRows.results.map(row => [row.product_id, Number(row.freshness ?? 100)]));
+    const available = STORE_PRODUCTS.filter(product => quantities[product.id] > 0 && freshness[product.id] > 0 && storeProductUnlocked(product, store));
     const totalStock = available.reduce((sum, product) => sum + quantities[product.id], 0);
     if (!premises || totalStock < 1) {
       await DB.prepare("UPDATE player_stores SET last_sales_at = ? WHERE id = ?")
@@ -1109,11 +1355,16 @@ export async function onRequest(context) {
       return { ...store, last_sales_at: processedAt };
     }
 
+    const profile = await ensureCityProfile(store.user_id);
+    const supplier = citySupplier(store.supplier_id);
+    const campaign = campaignForStore(store);
+    const competitor = competitorForStore(store);
     const conditionFactor = 0.5 + clamp(Number(store.condition ?? 100), 0, 100) / 200;
     const traffic = clamp(
       (premises.traffic + Number(store.signage || 0) * 0.07 + Number(store.checkouts || 0) * 0.05
         + Number(store.reputation || 50) / 500 + Number(staff.cashier || 0) * 0.05
-        + Number(staff.manager || 0) * 0.03) * markup.demand * conditionFactor,
+        + Number(staff.manager || 0) * 0.03 + supplier.demandBonus + Number(campaign?.trafficBonus || 0)
+        + (Number(profile.brand_level || 1) - 1) * 0.015 - competitor.strength) * markup.demand * conditionFactor,
       0.08,
       0.98,
     );
@@ -1128,11 +1379,15 @@ export async function onRequest(context) {
     for (let index = 0; index < customerCount; index++) {
       const choices = available.filter(product => quantities[product.id] > 0);
       if (!choices.length) break;
-      const totalWeight = choices.reduce((sum, product) => sum + product.demand * Math.min(4, quantities[product.id]), 0);
+      const news = currentCityNews();
+      const demandWeight = product => product.demand * Math.min(4, quantities[product.id])
+        * (news.products.includes(product.id) ? news.multiplier : 1)
+        * (0.7 + freshness[product.id] / 100 * 0.3);
+      const totalWeight = choices.reduce((sum, product) => sum + demandWeight(product), 0);
       let roll = Math.random() * totalWeight;
       let selected = choices[0];
       for (const product of choices) {
-        roll -= product.demand * Math.min(4, quantities[product.id]);
+        roll -= demandWeight(product);
         if (roll <= 0) {
           selected = product;
           break;
@@ -1190,8 +1445,9 @@ export async function onRequest(context) {
   }
 
   async function publicStoreState(store) {
+    await refreshStockFreshness("player_store_stock", "store_id", store.id);
     const [stockRows, salesRows, todayRow, staffRows, incidentRows] = await Promise.all([
-      DB.prepare("SELECT product_id, quantity FROM player_store_stock WHERE store_id = ? ORDER BY product_id").bind(store.id).all(),
+      DB.prepare("SELECT product_id, quantity, freshness FROM player_store_stock WHERE store_id = ? ORDER BY product_id").bind(store.id).all(),
       DB.prepare(`
         SELECT product_id, quantity, unit_price, revenue, created_at
         FROM player_store_sales
@@ -1210,6 +1466,7 @@ export async function onRequest(context) {
       `).bind(store.id).all(),
     ]);
     const stock = Object.fromEntries(stockRows.results.map(row => [row.product_id, Number(row.quantity)]));
+    const freshness = Object.fromEntries(stockRows.results.map(row => [row.product_id, Number(row.freshness ?? 100)]));
     const staff = Object.fromEntries(staffRows.results.map(row => [row.role_id, Number(row.level || 0)]));
     const premises = storePremises(store.premises_id) || STORE_PREMISES[0];
     const capacity = storeCapacity(store, premises, staff);
@@ -1219,10 +1476,15 @@ export async function onRequest(context) {
     const averageProfit = unlockedProducts.length
       ? unlockedProducts.reduce((sum, product) => sum + storeSalePrice(product, markup.value) - product.wholesale, 0) / unlockedProducts.length
       : 0;
+    const profile = await ensureCityProfile(store.user_id);
+    const supplier = citySupplier(store.supplier_id);
+    const competitor = competitorForStore(store);
+    const campaign = campaignForStore(store);
     const traffic = clamp(
       (premises.traffic + Number(store.signage || 0) * 0.07 + Number(store.checkouts || 0) * 0.05
         + Number(store.reputation || 50) / 500 + Number(staff.cashier || 0) * 0.05
-        + Number(staff.manager || 0) * 0.03) * markup.demand
+        + Number(staff.manager || 0) * 0.03 + supplier.demandBonus + Number(campaign?.trafficBonus || 0)
+        + (Number(profile.brand_level || 1) - 1) * 0.015 - competitor.strength) * markup.demand
         * (0.5 + clamp(Number(store.condition ?? 100), 0, 100) / 200),
       0.08,
       0.98,
@@ -1244,6 +1506,9 @@ export async function onRequest(context) {
       reputation: Number(store.reputation || 50),
       condition,
       repairCost: storeRepairCost(store),
+      supplier,
+      competitor,
+      campaign,
       lifetimeRevenue: Number(store.lifetime_revenue || 0),
       customersServed: Number(store.customers_served || 0),
       todayRevenue: Number(todayRow?.revenue || 0),
@@ -1283,6 +1548,7 @@ export async function onRequest(context) {
         return {
           ...product,
           stock: Number(stock[product.id] || 0),
+          freshness: Number(freshness[product.id] ?? 100),
           unlocked: storeProductUnlocked(product, store),
           salePrice,
           unitProfit: salePrice - product.wholesale,
@@ -1709,6 +1975,7 @@ export async function onRequest(context) {
       response.market = await marketState(user.id);
       response.properties = await propertyState(user.id);
       response.store = store;
+      response.city = await cityState(user.id);
     }
     if (user?.is_admin) response.adminUsers = await adminUsers();
     return json(response);
@@ -2119,7 +2386,9 @@ export async function onRequest(context) {
       if (choice.requires && Number(staff[choice.requires] || 0) < 1) {
         return json({ error: `Hire ${storeStaffRole(choice.requires)?.name || choice.requires} to use this choice` }, 400);
       }
-      const walletDelta = Number(choice.wallet || 0);
+      const cityProfile = await ensureCityProfile(user.id);
+      const insured = !!choice.insurable && Number(cityProfile.insurance_until || 0) > nowSeconds();
+      const walletDelta = insured ? Math.ceil(Number(choice.wallet || 0) * 0.3) : Number(choice.wallet || 0);
       if (walletDelta < 0 && Number(freshUser.wallet || 0) < Math.abs(walletDelta)) {
         return json({ error: `Need ${Math.abs(walletDelta)} wallet for this response` }, 400);
       }
@@ -2155,7 +2424,7 @@ export async function onRequest(context) {
       return json({
         ok: true,
         action,
-        outcome: { title: incident.title, choice: choice.label, walletDelta },
+        outcome: { title: incident.title, choice: choice.label, walletDelta, insured },
         store: await storeState(user.id),
       });
     }
@@ -2187,15 +2456,24 @@ export async function onRequest(context) {
       const staff = await storeStaffLevels(store.id);
       const availableCapacity = Math.max(0, storeCapacity(store, premises, staff) - used);
       if (quantity > availableCapacity) return json({ error: `Only ${availableCapacity} storage slots available` }, 400);
-      const cost = product.wholesale * quantity;
+      const cityProfile = await ensureCityProfile(user.id);
+      const supplier = citySupplier(store.supplier_id);
+      const passDiscount = Number(cityProfile.supplier_pass_until || 0) > nowSeconds() ? 0.85 : 1;
+      const cost = Math.ceil(product.wholesale * quantity * supplier.priceFactor * passDiscount);
       if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet for stock` }, 400);
+      const existingStock = await DB.prepare("SELECT quantity, freshness FROM player_store_stock WHERE store_id = ? AND product_id = ?")
+        .bind(store.id, product.id).first();
+      const freshness = weightedFreshness(existingStock?.quantity, existingStock?.freshness, quantity, supplier.freshness);
       await DB.batch([
         DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(cost, user.id),
         DB.prepare(`
-          INSERT INTO player_store_stock (store_id, product_id, quantity)
-          VALUES (?, ?, ?)
-          ON CONFLICT(store_id, product_id) DO UPDATE SET quantity = quantity + excluded.quantity
-        `).bind(store.id, product.id, quantity),
+          INSERT INTO player_store_stock (store_id, product_id, quantity, freshness, freshness_updated_at)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(store_id, product_id) DO UPDATE SET
+            quantity = quantity + excluded.quantity,
+            freshness = excluded.freshness,
+            freshness_updated_at = excluded.freshness_updated_at
+        `).bind(store.id, product.id, quantity, freshness, nowSeconds()),
       ]);
       return json({ ok: true, action, productId: product.id, quantity, cost, store: await storeState(user.id) });
     }
@@ -2229,6 +2507,229 @@ export async function onRequest(context) {
     }
 
     return json({ error: "Bad store action" }, 400);
+  }
+
+  if (path === "/city" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+    const profile = await ensureCityProfile(user.id);
+    const freshUser = await userById(user.id);
+    const ownedStore = async () => {
+      if (!data.storeId) return null;
+      return await DB.prepare("SELECT * FROM player_stores WHERE id = ? AND user_id = ?")
+        .bind(String(data.storeId), user.id).first();
+    };
+
+    if (action === "setSupplier") {
+      const store = await ownedStore();
+      const supplier = CITY_SUPPLIERS.find(item => item.id === String(data.supplierId || ""));
+      if (!store || !supplier) return json({ error: "Store or supplier not found" }, 404);
+      await DB.prepare("UPDATE player_stores SET supplier_id = ? WHERE id = ?").bind(supplier.id, store.id).run();
+    } else if (action === "startCampaign") {
+      const store = await ownedStore();
+      const campaign = CITY_CAMPAIGNS.find(item => item.id === String(data.campaignId || ""));
+      if (!store || !campaign) return json({ error: "Store or campaign not found" }, 404);
+      if (campaign.cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${campaign.cost} wallet` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(campaign.cost, user.id),
+        DB.prepare("UPDATE player_stores SET campaign_type = ?, campaign_until = ? WHERE id = ?")
+          .bind(campaign.id, nowSeconds() + campaign.duration, store.id),
+      ]);
+    } else if (action === "renameBrand") {
+      const name = String(data.name || "").trim().replace(/\s+/g, " ");
+      if (name.length < 3 || name.length > 28 || !/^[\p{L}\p{N} '.-]+$/u.test(name)) {
+        return json({ error: "Brand name must be 3-28 letters or numbers" }, 400);
+      }
+      await DB.prepare("UPDATE city_profiles SET brand_name = ? WHERE user_id = ?").bind(name, user.id).run();
+    } else if (action === "upgradeBrand") {
+      const level = Number(profile.brand_level || 1);
+      if (level >= 10) return json({ error: "Brand is already max level" }, 400);
+      const cost = 50000 * level;
+      if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(cost, user.id),
+        DB.prepare("UPDATE city_profiles SET brand_level = brand_level + 1 WHERE user_id = ?").bind(user.id),
+      ]);
+    } else if (action === "buyVehicle") {
+      const vehicle = cityVehicle(data.vehicleId);
+      if (!vehicle) return json({ error: "Vehicle not found" }, 404);
+      if (vehicle.price > Number(freshUser.wallet || 0)) return json({ error: `Need ${vehicle.price} wallet` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(vehicle.price, user.id),
+        DB.prepare(`
+          UPDATE city_profiles SET vehicle_id = ?, vehicle_fuel = ?, vehicle_condition = 100 WHERE user_id = ?
+        `).bind(vehicle.id, vehicle.fuelCapacity, user.id),
+      ]);
+    } else if (action === "refuelVehicle" || action === "repairVehicle") {
+      const vehicle = cityVehicle(profile.vehicle_id);
+      if (!vehicle) return json({ error: "Buy a vehicle first" }, 400);
+      const cost = action === "refuelVehicle"
+        ? Math.max(0, vehicle.fuelCapacity - Number(profile.vehicle_fuel || 0)) * 5
+        : Math.max(0, 100 - Number(profile.vehicle_condition ?? 100)) * 180;
+      if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(cost, user.id),
+        action === "refuelVehicle"
+          ? DB.prepare("UPDATE city_profiles SET vehicle_fuel = ? WHERE user_id = ?").bind(vehicle.fuelCapacity, user.id)
+          : DB.prepare("UPDATE city_profiles SET vehicle_condition = 100 WHERE user_id = ?").bind(user.id),
+      ]);
+    } else if (action === "upgradeWarehouse") {
+      const current = warehouseInfo(profile);
+      const next = CITY_WAREHOUSES.find(item => item.level === current.level + 1);
+      if (!next) return json({ error: "Warehouse is already max level" }, 400);
+      if (Number(current.cost || 0) > Number(freshUser.wallet || 0)) return json({ error: `Need ${current.cost} wallet` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(current.cost, user.id),
+        DB.prepare("UPDATE city_profiles SET warehouse_level = ? WHERE user_id = ?").bind(next.level, user.id),
+      ]);
+    } else if (action === "buyWarehouseStock") {
+      const warehouse = warehouseInfo(profile);
+      if (warehouse.capacity < 1) return json({ error: "Buy a warehouse first" }, 400);
+      const product = storeProduct(data.productId);
+      const supplier = citySupplier(data.supplierId);
+      const quantity = clamp(money(data.quantity || 1), 1, 500);
+      if (!product) return json({ error: "Product not found" }, 404);
+      const usedRow = await DB.prepare("SELECT COALESCE(SUM(quantity), 0) AS used FROM warehouse_stock WHERE user_id = ?")
+        .bind(user.id).first();
+      if (Number(usedRow?.used || 0) + quantity > warehouse.capacity) return json({ error: "Warehouse capacity exceeded" }, 400);
+      const vehicle = cityVehicle(profile.vehicle_id);
+      if (vehicle && (Number(profile.vehicle_fuel || 0) < vehicle.tripFuel || Number(profile.vehicle_condition || 0) <= 5)) {
+        return json({ error: "Vehicle needs fuel or repair" }, 400);
+      }
+      if (vehicle && quantity > vehicle.cargo) return json({ error: `Vehicle cargo limit is ${vehicle.cargo}` }, 400);
+      const discount = Number(profile.supplier_pass_until || 0) > nowSeconds() ? 0.85 : 1;
+      const deliveryFee = vehicle ? 0 : 250 + quantity * 2;
+      const cost = Math.ceil(product.wholesale * supplier.priceFactor * discount * quantity) + deliveryFee;
+      if (cost > Number(freshUser.wallet || 0)) return json({ error: `Need ${cost} wallet` }, 400);
+      const existing = await DB.prepare("SELECT quantity, freshness FROM warehouse_stock WHERE user_id = ? AND product_id = ?")
+        .bind(user.id, product.id).first();
+      const freshness = weightedFreshness(existing?.quantity, existing?.freshness, quantity, supplier.freshness);
+      const statements = [
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(cost, user.id),
+        DB.prepare(`
+          INSERT INTO warehouse_stock (user_id, product_id, quantity, freshness, freshness_updated_at)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(user_id, product_id) DO UPDATE SET quantity = quantity + excluded.quantity,
+            freshness = excluded.freshness, freshness_updated_at = excluded.freshness_updated_at
+        `).bind(user.id, product.id, quantity, freshness, nowSeconds()),
+      ];
+      if (vehicle) statements.push(DB.prepare(`
+        UPDATE city_profiles SET vehicle_fuel = MAX(0, vehicle_fuel - ?),
+          vehicle_condition = MAX(0, vehicle_condition - ?) WHERE user_id = ?
+      `).bind(vehicle.tripFuel, vehicle.conditionLoss, user.id));
+      await DB.batch(statements);
+    } else if (action === "transferWarehouseStock") {
+      const store = await ownedStore();
+      const product = storeProduct(data.productId);
+      const quantity = clamp(money(data.quantity || 1), 1, 500);
+      if (!store || !product) return json({ error: "Store or product not found" }, 404);
+      if (!storeProductUnlocked(product, store)) return json({ error: `Need ${product.fixture} level ${product.fixtureLevel}` }, 400);
+      const warehouseStock = await DB.prepare("SELECT * FROM warehouse_stock WHERE user_id = ? AND product_id = ?")
+        .bind(user.id, product.id).first();
+      if (quantity > Number(warehouseStock?.quantity || 0)) return json({ error: "Not enough warehouse stock" }, 400);
+      const stockRows = await DB.prepare("SELECT quantity FROM player_store_stock WHERE store_id = ?").bind(store.id).all();
+      const staff = await storeStaffLevels(store.id);
+      const available = storeCapacity(store, storePremises(store.premises_id), staff)
+        - stockRows.results.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+      if (quantity > available) return json({ error: `Only ${Math.max(0, available)} store slots available` }, 400);
+      const vehicle = cityVehicle(profile.vehicle_id);
+      const deliveryCost = vehicle ? 0 : 100 + quantity;
+      if (vehicle && (quantity > vehicle.cargo || Number(profile.vehicle_fuel || 0) < vehicle.tripFuel)) {
+        return json({ error: "Vehicle cargo or fuel is insufficient" }, 400);
+      }
+      if (deliveryCost > Number(freshUser.wallet || 0)) return json({ error: `Need ${deliveryCost} wallet` }, 400);
+      const existing = await DB.prepare("SELECT quantity, freshness FROM player_store_stock WHERE store_id = ? AND product_id = ?")
+        .bind(store.id, product.id).first();
+      const freshness = weightedFreshness(existing?.quantity, existing?.freshness, quantity, warehouseStock.freshness);
+      const statements = [
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(deliveryCost, user.id),
+        DB.prepare("UPDATE warehouse_stock SET quantity = quantity - ? WHERE user_id = ? AND product_id = ?")
+          .bind(quantity, user.id, product.id),
+        DB.prepare(`
+          INSERT INTO player_store_stock (store_id, product_id, quantity, freshness, freshness_updated_at)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(store_id, product_id) DO UPDATE SET quantity = quantity + excluded.quantity,
+            freshness = excluded.freshness, freshness_updated_at = excluded.freshness_updated_at
+        `).bind(store.id, product.id, quantity, freshness, nowSeconds()),
+      ];
+      if (vehicle) statements.push(DB.prepare(`
+        UPDATE city_profiles SET vehicle_fuel = MAX(0, vehicle_fuel - ?),
+          vehicle_condition = MAX(0, vehicle_condition - ?) WHERE user_id = ?
+      `).bind(vehicle.tripFuel, vehicle.conditionLoss, user.id));
+      await DB.batch(statements);
+    } else if (action === "blackMarketBuy") {
+      const item = BLACK_MARKET_ITEMS.find(entry => entry.id === String(data.itemId || ""));
+      const cycle = Math.floor(nowSeconds() / 600);
+      const offeredIds = BLACK_MARKET_ITEMS.map((entry, index) => ({ id: entry.id, sort: (cycle * 17 + index * 29) % 101 }))
+        .sort((a, b) => a.sort - b.sort).slice(0, 3).map(entry => entry.id);
+      if (!item || !offeredIds.includes(item.id)) return json({ error: "Item is not on sale this cycle" }, 404);
+      const purchased = await DB.prepare("SELECT quantity FROM black_market_purchases WHERE user_id = ? AND item_id = ? AND market_cycle = ?")
+        .bind(user.id, item.id, cycle).first();
+      if (Number(purchased?.quantity || 0) >= item.stock) return json({ error: "Offer sold out" }, 400);
+      if (item.price > Number(freshUser.wallet || 0)) return json({ error: `Need ${item.price} wallet` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(item.price, user.id),
+        DB.prepare(`
+          INSERT INTO black_market_purchases (user_id, item_id, market_cycle, quantity) VALUES (?, ?, ?, 1)
+          ON CONFLICT(user_id, item_id, market_cycle) DO UPDATE SET quantity = quantity + 1
+        `).bind(user.id, item.id, cycle),
+        DB.prepare(`
+          INSERT INTO city_inventory (user_id, item_id, quantity) VALUES (?, ?, 1)
+          ON CONFLICT(user_id, item_id) DO UPDATE SET quantity = quantity + 1
+        `).bind(user.id, item.id),
+      ]);
+    } else if (action === "useBlackMarketItem") {
+      const item = BLACK_MARKET_ITEMS.find(entry => entry.id === String(data.itemId || ""));
+      const inventory = item && await DB.prepare("SELECT quantity FROM city_inventory WHERE user_id = ? AND item_id = ?")
+        .bind(user.id, item.id).first();
+      if (!item || Number(inventory?.quantity || 0) < 1) return json({ error: "Item not in inventory" }, 404);
+      const statements = [DB.prepare("UPDATE city_inventory SET quantity = quantity - 1 WHERE user_id = ? AND item_id = ?")
+        .bind(user.id, item.id)];
+      if (item.id === "insurance_papers") {
+        statements.push(DB.prepare("UPDATE city_profiles SET insurance_until = ? WHERE user_id = ?").bind(nowSeconds() + 1800, user.id));
+      } else if (item.id === "supplier_pass") {
+        statements.push(DB.prepare("UPDATE city_profiles SET supplier_pass_until = ? WHERE user_id = ?").bind(nowSeconds() + 900, user.id));
+      } else if (item.id === "rare_parts") {
+        if (!cityVehicle(profile.vehicle_id)) return json({ error: "Buy a vehicle first" }, 400);
+        statements.push(DB.prepare("UPDATE city_profiles SET vehicle_condition = MIN(100, vehicle_condition + 30) WHERE user_id = ?").bind(user.id));
+      } else {
+        const store = await ownedStore();
+        if (!store) return json({ error: "Choose one of your stores" }, 400);
+        if (item.id === "repair_kit") statements.push(DB.prepare("UPDATE player_stores SET condition = MIN(100, condition + 20) WHERE id = ?").bind(store.id));
+        if (item.id === "camera_kit") statements.push(DB.prepare(`
+          INSERT INTO player_store_staff (store_id, role_id, level) VALUES (?, 'security', 1)
+          ON CONFLICT(store_id, role_id) DO UPDATE SET level = MIN(3, level + 1)
+        `).bind(store.id));
+      }
+      await DB.batch(statements);
+    } else if (action === "auctionBid") {
+      await ensureCityAuctions();
+      const auction = await DB.prepare("SELECT * FROM property_auctions WHERE id = ? AND status = 'active' AND ends_at > ?")
+        .bind(String(data.auctionId || ""), nowSeconds()).first();
+      if (!auction) return json({ error: "Auction has ended" }, 400);
+      const minimum = Number(auction.current_bid || 0) + Math.max(1000, Math.ceil(Number(auction.current_bid || 0) * 0.05));
+      const bid = Math.max(0, money(data.amount || 0));
+      if (bid < minimum) return json({ error: `Minimum bid is ${minimum}` }, 400);
+      const ownIncrease = auction.bidder_id === user.id ? bid - Number(auction.current_bid || 0) : bid;
+      if (ownIncrease > Number(freshUser.wallet || 0)) return json({ error: `Need ${ownIncrease} wallet` }, 400);
+      const statements = [
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(ownIncrease, user.id),
+        DB.prepare(`
+          UPDATE property_auctions SET current_bid = ?, bidder_id = ?, updated_at = ?,
+            ends_at = CASE WHEN ends_at - ? < 30 THEN ? + 30 ELSE ends_at END
+          WHERE id = ? AND status = 'active'
+        `).bind(bid, user.id, nowSeconds(), nowSeconds(), nowSeconds(), auction.id),
+      ];
+      if (auction.bidder_id && auction.bidder_id !== user.id) {
+        statements.push(DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?")
+          .bind(Number(auction.current_bid || 0), auction.bidder_id));
+      }
+      await DB.batch(statements);
+    } else {
+      return json({ error: "Bad city action" }, 400);
+    }
+
+    return json({ ok: true, action, city: await cityState(user.id), store: await storeState(user.id) });
   }
 
   if (path.startsWith("/market/") && request.method === "GET") {
@@ -2670,6 +3171,49 @@ async function ensureRuntimeTables(DB) {
       ON store_incidents(store_id) WHERE status IN ('pending', 'resolving')
     `),
     DB.prepare(`
+      CREATE TABLE IF NOT EXISTS city_profiles (
+        user_id TEXT PRIMARY KEY,
+        brand_name TEXT NOT NULL DEFAULT 'Independent Retail',
+        brand_level INTEGER NOT NULL DEFAULT 1,
+        vehicle_id TEXT NOT NULL DEFAULT '',
+        vehicle_fuel INTEGER NOT NULL DEFAULT 0,
+        vehicle_condition INTEGER NOT NULL DEFAULT 100,
+        warehouse_level INTEGER NOT NULL DEFAULT 0,
+        insurance_until INTEGER NOT NULL DEFAULT 0,
+        supplier_pass_until INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS warehouse_stock (
+        user_id TEXT NOT NULL, product_id TEXT NOT NULL, quantity INTEGER NOT NULL DEFAULT 0,
+        freshness INTEGER NOT NULL DEFAULT 100, freshness_updated_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(user_id, product_id)
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_warehouse_stock_user ON warehouse_stock(user_id)"),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS city_inventory (
+        user_id TEXT NOT NULL, item_id TEXT NOT NULL, quantity INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(user_id, item_id)
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS black_market_purchases (
+        user_id TEXT NOT NULL, item_id TEXT NOT NULL, market_cycle INTEGER NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id, item_id, market_cycle)
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_black_market_cycle ON black_market_purchases(market_cycle)"),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS property_auctions (
+        id TEXT PRIMARY KEY, property_id TEXT NOT NULL, current_bid INTEGER NOT NULL,
+        bidder_id TEXT, ends_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'active',
+        round INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_property_auctions_ends ON property_auctions(status, ends_at)"),
+    DB.prepare(`
       CREATE TABLE IF NOT EXISTS market_assets (
         symbol TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -2744,6 +3288,11 @@ async function ensureRuntimeTables(DB) {
   await ensureTableColumn(DB, "market_assets", "tick_offset", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "owned_properties", "condition", "INTEGER NOT NULL DEFAULT 100");
   await ensureTableColumn(DB, "player_stores", "next_event_at", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "player_stores", "supplier_id", "TEXT NOT NULL DEFAULT 'local_coop'");
+  await ensureTableColumn(DB, "player_stores", "campaign_type", "TEXT NOT NULL DEFAULT ''");
+  await ensureTableColumn(DB, "player_stores", "campaign_until", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "player_store_stock", "freshness", "INTEGER NOT NULL DEFAULT 100");
+  await ensureTableColumn(DB, "player_store_stock", "freshness_updated_at", "INTEGER NOT NULL DEFAULT 0");
   await DB.batch([
     DB.prepare(`
       INSERT OR IGNORE INTO player_stores (
@@ -2773,6 +3322,10 @@ async function ensureRuntimeTables(DB) {
   `).bind(initialMarketTickOffset(asset.symbol), asset.symbol)));
   await DB.prepare("UPDATE player_stores SET next_event_at = ? WHERE next_event_at = 0")
     .bind(now + 120).run();
+  await DB.prepare("UPDATE player_store_stock SET freshness_updated_at = ? WHERE freshness_updated_at = 0")
+    .bind(now).run();
+  await DB.prepare("UPDATE warehouse_stock SET freshness_updated_at = ? WHERE freshness_updated_at = 0")
+    .bind(now).run();
   runtimeTablesReady = true;
 }
 

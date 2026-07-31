@@ -287,7 +287,7 @@ try {
   });
   await request("/api/admin/userAction", {
     method: "POST",
-    body: { userId: registeredStoreOwner.user.id, action: "addWallet", amount: 170000, reason: "smoke store grant" },
+    body: { userId: registeredStoreOwner.user.id, action: "addWallet", amount: 970000, reason: "smoke store and city grant" },
     session: admin,
   });
   const storeBeforeBuy = await request("/api/state", { session: storeOwner });
@@ -352,7 +352,8 @@ try {
   assert(firstStoreReady.staffCount === 2, "store staff count incorrect");
   assert(firstStoreReady.capacity >= firstStoreReady.premises.capacity + 45, "staff storage bonus missing");
   assert(firstStoreReady.products.length >= 14, "new supplier products missing");
-  assert(firstStoreReady.products.find(item => item.id === "bread")?.stock === 20, "store stock did not persist");
+  const initialBreadStock = firstStoreReady.products.find(item => item.id === "bread")?.stock;
+  assert(initialBreadStock > 0 && initialBreadStock <= 20, "store stock did not persist");
   assert(firstStoreReady.products.find(item => item.id === "water")?.unlocked === false, "fridge product unlocked without fridge");
   assert(secondStoreReady.products.find(item => item.id === "bread")?.stock === 0, "stock leaked into second location");
   let storeAfterSales;
@@ -362,7 +363,7 @@ try {
   }
   const firstStoreAfterSales = storeAfterSales.store.stores.find(item => item.id === firstStoreId);
   assert(firstStoreAfterSales.lifetimeRevenue > 0, "automatic store sales produced no revenue");
-  assert(firstStoreAfterSales.products.find(item => item.id === "bread")?.stock < 20, "automatic store sales did not reduce stock");
+  assert(firstStoreAfterSales.products.find(item => item.id === "bread")?.stock < initialBreadStock, "automatic store sales did not reduce stock");
   assert(firstStoreAfterSales.recentSales.length > 0, "store sales history missing");
   assert(firstStoreAfterSales.condition < 100, "store did not wear after serving customers");
   assert(firstStoreAfterSales.incident?.choices?.length === 3, "live store incident was not generated");
@@ -401,6 +402,71 @@ try {
   });
   const storeAfterRepair = await request("/api/state", { session: storeOwner });
   assert(storeAfterRepair.store.stores.find(item => item.id === firstStoreId)?.condition === 100, "store repair failed");
+
+  assert(storeAfterRepair.city?.news?.title, "city news missing from state");
+  assert(storeAfterRepair.city.stores.find(item => item.id === firstStoreId)?.competitor?.name, "store competitor missing");
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "setSupplier", storeId: firstStoreId, supplierId: "premium_imports" },
+    session: storeOwner,
+  });
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "startCampaign", storeId: firstStoreId, campaignId: "flyers" },
+    session: storeOwner,
+  });
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "renameBrand", name: "Smoke City Retail" },
+    session: storeOwner,
+  });
+  await request("/api/city", { method: "POST", body: { action: "upgradeBrand" }, session: storeOwner });
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "buyVehicle", vehicleId: "scooter" },
+    session: storeOwner,
+  });
+  await request("/api/city", { method: "POST", body: { action: "upgradeWarehouse" }, session: storeOwner });
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "buyWarehouseStock", productId: "bread", supplierId: "local_coop", quantity: 20 },
+    session: storeOwner,
+  });
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "transferWarehouseStock", storeId: firstStoreId, productId: "bread", quantity: 5 },
+    session: storeOwner,
+  });
+  let cityReady = await request("/api/state", { session: storeOwner });
+  const blackOffer = cityReady.city.blackMarket.offers.find(item => item.remaining > 0);
+  assert(blackOffer, "black market has no available offer");
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "blackMarketBuy", itemId: blackOffer.id },
+    session: storeOwner,
+  });
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "useBlackMarketItem", itemId: blackOffer.id, storeId: firstStoreId },
+    session: storeOwner,
+  });
+  cityReady = await request("/api/state", { session: storeOwner });
+  const auction = cityReady.city.auctions[0];
+  await request("/api/city", {
+    method: "POST",
+    body: { action: "auctionBid", auctionId: auction.id, amount: auction.minimumBid },
+    session: storeOwner,
+  });
+  const cityAfterBid = await request("/api/state", { session: storeOwner });
+  assert(cityAfterBid.city.profile.brandName === "Smoke City Retail", "city brand rename did not persist");
+  assert(cityAfterBid.city.profile.brandLevel === 2, "city brand upgrade did not persist");
+  assert(cityAfterBid.city.vehicle?.id === "scooter" && cityAfterBid.city.vehicle.fuel < 60, "city vehicle delivery state incorrect");
+  assert(cityAfterBid.city.warehouse.level === 1, "warehouse upgrade did not persist");
+  assert(cityAfterBid.city.warehouse.stock.find(item => item.productId === "bread")?.quantity === 15, "warehouse transfer quantity incorrect");
+  assert(cityAfterBid.city.stores.find(item => item.id === firstStoreId)?.supplierId === "premium_imports", "supplier selection did not persist");
+  assert(cityAfterBid.city.stores.find(item => item.id === firstStoreId)?.campaign?.id === "flyers", "campaign did not persist");
+  assert(cityAfterBid.city.auctions.find(item => item.id === auction.id)?.leading, "auction bid did not persist");
+  assert(cityAfterBid.store.stores.find(item => item.id === firstStoreId)?.products.find(item => item.id === "bread")?.freshness > 0, "store freshness missing");
 
   await request("/api/life", { method: "POST", body: { action: "buyItem", itemId: "pizza", amount: 1 }, session: player });
   await request("/api/life", { method: "POST", body: { action: "useItem", itemId: "pizza", amount: 1 }, session: player });
@@ -593,6 +659,9 @@ try {
     storeLocations: storeAfterSales.store.stores.length,
     storeStaff: storeAfterIncident.store.empire.staff,
     incidentChoice: incidentChoice.id,
+    cityBrand: cityAfterBid.city.profile.brandName,
+    cityWarehouseStock: cityAfterBid.city.warehouse.stock.find(item => item.productId === "bread")?.quantity,
+    auctionLeading: cityAfterBid.city.auctions.find(item => item.id === auction.id)?.leading,
   }, null, 2));
 } catch (error) {
   console.error(serverOutput.trim());
