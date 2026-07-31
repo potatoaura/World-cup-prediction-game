@@ -157,9 +157,11 @@ try {
   const player = makeSession();
   const admin = makeSession();
   const borrower = makeSession();
+  const propertyBuyer = makeSession();
   const playerName = `player_${stamp}`;
   const adminName = `admin_${stamp}`;
   const borrowerName = `borrower_${stamp}`;
+  const propertyBuyerName = `property_${stamp}`;
 
   const registeredPlayer = await request("/api/register", {
     method: "POST",
@@ -219,6 +221,40 @@ try {
   assert(finalState.user.life?.water >= 1, "new player water storage missing");
   assert(finalState.user.life?.items?.length >= 6, "life shop catalog missing");
   assert(finalState.user.life?.housingListings?.length >= 5, "housing listings missing");
+  assert(finalState.properties?.listings?.some(item => item.price >= 100000), "property listings missing 100k apartments");
+
+  const registeredPropertyBuyer = await request("/api/register", {
+    method: "POST",
+    body: { username: propertyBuyerName, password: "pass1234", adminCode: "" },
+    session: propertyBuyer,
+  });
+  await request("/api/admin/userAction", {
+    method: "POST",
+    body: { userId: registeredPropertyBuyer.user.id, action: "addWallet", amount: 110000, reason: "smoke property grant" },
+    session: admin,
+  });
+  await request("/api/property", {
+    method: "POST",
+    body: { action: "buy", propertyId: "micro_loft" },
+    session: propertyBuyer,
+  });
+  const propertyAfterBuy = await request("/api/state", { session: propertyBuyer });
+  assert(propertyAfterBuy.properties.owned.length === 1, "property buy did not create owned apartment");
+  assert(propertyAfterBuy.properties.owned[0].price === 100000, "cheapest apartment should cost 100000");
+  await request("/api/property", {
+    method: "POST",
+    body: { action: "toggleRentOut", ownedId: propertyAfterBuy.properties.owned[0].id },
+    session: propertyBuyer,
+  });
+  const propertyAfterRentOut = await request("/api/state", { session: propertyBuyer });
+  assert(propertyAfterRentOut.properties.incomePerDay > 0, "renting out property did not add income");
+  await request("/api/property", {
+    method: "POST",
+    body: { action: "rentHome", propertyId: "market_studio" },
+    session: propertyBuyer,
+  });
+  const propertyAfterHomeRent = await request("/api/state", { session: propertyBuyer });
+  assert(propertyAfterHomeRent.user.life.housing.id === "market_studio", "renting apartment as home did not update housing");
 
   await request("/api/life", { method: "POST", body: { action: "buyItem", itemId: "pizza", amount: 1 }, session: player });
   await request("/api/life", { method: "POST", body: { action: "useItem", itemId: "pizza", amount: 1 }, session: player });
@@ -316,6 +352,25 @@ try {
   assert(readyWorkState.activeQuest.reward > 0, "revealed work quest did not include reward");
   assert(readyWorkState.activeQuest.description, "revealed work quest did not include description");
   assert(readyWorkState.activeQuest.objective, "revealed work quest did not include objective");
+  assert(readyWorkState.activeQuest.stepsRequired > 0, "revealed work quest did not include required steps");
+  assert(readyWorkState.activeQuest.progress === 0, "new work quest should start with zero progress");
+  await expectError(400, "/api/work", {
+    method: "POST",
+    body: { action: "complete" },
+    session: borrower,
+  });
+  let workTaskResult;
+  for (let index = 0; index < readyWorkState.activeQuest.stepsRequired; index++) {
+    workTaskResult = await request("/api/work", {
+      method: "POST",
+      body: { action: "task" },
+      session: borrower,
+    });
+  }
+  assert(
+    workTaskResult.quest.progress === readyWorkState.activeQuest.stepsRequired,
+    "work task progress did not reach required steps"
+  );
   const completedWork = await request("/api/work", {
     method: "POST",
     body: { action: "complete" },

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
   cake INTEGER NOT NULL DEFAULT 0,
   rent_due INTEGER NOT NULL DEFAULT 0,
   housing TEXT NOT NULL DEFAULT 'room',
+  last_daily_at INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -87,10 +88,21 @@ CREATE TABLE IF NOT EXISTS work_quests (
   difficulty TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   objective TEXT NOT NULL DEFAULT '',
+  task_prompt TEXT NOT NULL DEFAULT '',
+  steps_required INTEGER NOT NULL DEFAULT 3,
+  progress INTEGER NOT NULL DEFAULT 0,
   reward INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'posted',
   available_at INTEGER NOT NULL,
   completed_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS owned_properties (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  property_id TEXT NOT NULL,
+  rented_out INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 
@@ -138,6 +150,7 @@ CREATE INDEX IF NOT EXISTS idx_bans_admin_id ON bans(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_logs_target_user_id ON admin_logs(target_user_id);
 CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at);
+CREATE INDEX IF NOT EXISTS idx_owned_properties_user ON owned_properties(user_id);
 CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
 CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at);

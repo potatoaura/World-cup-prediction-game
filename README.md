@@ -21,9 +21,13 @@ Environment variable:
 
 `ADMIN_CODE = your secret admin code`
 
+Optional economy variable:
+
+`DAY_LENGTH_SECONDS = 600`
+
 First admin: register and enter `ADMIN_CODE` in the optional admin code field.
 
-## v2.9 gameplay state
+## v3.0 gameplay state
 
 The World Cup bracket UI has been removed from the main screen. Match prediction and payout endpoints remain in the API as archived season support.
 
@@ -48,6 +52,7 @@ Loan behavior:
 
 - Players can take more than one loan while they still have available credit.
 - Work is now a board flow: post an ad, wait while the offer is hidden, then reveal and collect the quest reward.
+- Revealed work quests now require task progress before the reward can be collected.
 - Production work quest search time is random by default: 2-10 minutes.
 - The client does not receive exact remaining work time while a job is hidden.
 - Revealed work quests now include a description and concrete task objective.
@@ -60,9 +65,19 @@ Life behavior:
 - Food and drinks have different hunger and thirst effects.
 - Players can choose housing from listings shown beside a small city map.
 - Better housing costs a deposit and changes rent added each day.
-- Advancing to the next day lowers hunger and thirst and adds housing rent due.
+- The manual Next day button is removed from the player UI.
+- Server upkeep advances days automatically on a hidden timer.
+- Automatic upkeep lowers hunger and thirst, adds housing rent due, handles overdue loans, and applies rental-property income.
 - Zero hunger or zero thirst blocks work quest completion.
 - Overdue rent, starvation, and dehydration can reduce credit rating over time.
+
+Real estate behavior:
+
+- Apartments can be shown from the Real Estate panel.
+- Apartments can be rented as the player's home or bought as investments.
+- The cheapest buyable apartment costs 100000 wallet.
+- Owned apartments can be rented out for passive income during automatic upkeep.
+- Apartment cards show purchase price, home rent, deposit, floor, comfort points, and rent-out income.
 
 Casino behavior:
 

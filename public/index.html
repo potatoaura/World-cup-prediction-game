@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prediction Economy v2.9</title>
+<title>Prediction Economy v3.0</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
   <div>
-    <h1>Prediction Economy v2.9</h1>
+    <h1>Prediction Economy v3.0</h1>
     <p>Persistent browser economy</p>
   </div>
   <div id="auth" class="auth">
@@ -68,7 +68,6 @@
         <button onclick="bankAction('deposit')">Deposit</button>
         <button onclick="bankAction('loan')">Loan</button>
         <button onclick="bankAction('repay')">Repay</button>
-        <button class="secondary" onclick="bankAction('nextDay')">Next day</button>
       </div>
     </section>
 
@@ -110,18 +109,33 @@
       <div class="lifeBlock">
         <div class="lifeBlockHead">
           <h3>Housing Listings</h3>
-          <span id="lifeComfort">Comfort 1</span>
+          <button class="secondary" onclick="toggleHousingListings()">Show rentals</button>
         </div>
-        <div class="housingBoard">
+        <div id="housingBoard" class="housingBoard hidden">
           <div id="housingMap" class="housingMap"></div>
           <div id="housingListings" class="housingListings"></div>
         </div>
+        <p id="lifeComfort" class="muted">Comfort 1</p>
       </div>
       <div class="inlineControls lifeControls">
         <input id="rentAmount" type="number" value="22" min="1">
         <button onclick="lifeAction('payRent')">Pay rent</button>
       </div>
       <p id="lifeHint" class="muted">Food restores hunger. Rent grows each day.</p>
+    </section>
+
+    <section id="propertyPanel" class="panel propertyPanel hidden">
+      <div class="head">
+        <h2>Real Estate</h2>
+        <button id="propertyToggle" class="secondary" onclick="togglePropertyListings()">Show apartments</button>
+      </div>
+      <div class="propertySummary">
+        <span>Owned <b id="propertyOwned">0</b></span>
+        <span>Value <b id="propertyValue">0</b></span>
+        <span>Rent income/day <b id="propertyIncome">0</b></span>
+      </div>
+      <div id="propertyListings" class="propertyListings hidden"></div>
+      <div id="ownedProperties" class="ownedProperties"></div>
     </section>
 
     <section id="workPanel" class="panel workPanel hidden">

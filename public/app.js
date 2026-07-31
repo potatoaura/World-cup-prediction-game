@@ -1,4 +1,4 @@
-let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [] };
+let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null };
 let wheelRotation = 0;
 let ballRotation = 0;
 let rouletteBusy = false;
@@ -8,6 +8,8 @@ let lastWorkPollAt = 0;
 let marketDetailSymbol = "";
 let marketDetail = null;
 let marketDetailLoading = false;
+let housingListingsOpen = false;
+let propertyListingsOpen = false;
 
 const ROULETTE_NUMBERS = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
@@ -62,7 +64,7 @@ async function loadState() {
     }
     hideError();
   } catch (error) {
-    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [] };
+    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null };
     showError(`API error: ${error.message}`);
   }
   render();
@@ -84,6 +86,7 @@ function render() {
   el("stats").classList.toggle("hidden", !user);
   el("timeWidget").classList.toggle("hidden", !user);
   el("lifePanel").classList.toggle("hidden", !user);
+  el("propertyPanel").classList.toggle("hidden", !user);
   el("workPanel").classList.toggle("hidden", !user);
   el("marketPanel").classList.toggle("hidden", !user);
   el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
@@ -104,6 +107,7 @@ function render() {
   renderLeaderboard();
   renderAdmin();
   renderLife();
+  renderProperties();
   renderWorkQuest();
   renderMarket();
   renderMarketDetail();
@@ -224,6 +228,27 @@ async function chooseHousing(housingId) {
   }
 }
 
+function toggleHousingListings() {
+  housingListingsOpen = !housingListingsOpen;
+  renderLife();
+}
+
+function togglePropertyListings() {
+  propertyListingsOpen = !propertyListingsOpen;
+  renderProperties();
+}
+
+async function propertyAction(action, propertyId, ownedId = "") {
+  try {
+    const result = await api("/api/property", { action, propertyId, ownedId });
+    if (result.properties) STATE.properties = result.properties;
+    log(`Property: ${action}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
 function currentServerSecond() {
   return Math.floor(Date.now() / 1000) + serverClockOffsetSeconds;
 }
@@ -253,7 +278,7 @@ function renderClock() {
     month: "short",
     day: "numeric",
   });
-  el("clockDay").textContent = `Day ${STATE.user.day}`;
+  el("clockDay").textContent = `Day ${STATE.user.day} auto`;
   el("clockLoan").textContent = STATE.user.loanDue === null || STATE.user.loanDue === undefined
     ? "No loan due"
     : `Loan due day ${STATE.user.loanDue}`;
@@ -298,6 +323,9 @@ function renderLife() {
   el("lifeHousing").textContent = housing.name || "Starter Room";
   el("lifeHousingArea").textContent = housing.area || "Old Town";
   el("lifeComfort").textContent = `Comfort ${housing.comfort || 1}`;
+  el("housingBoard").classList.toggle("hidden", !housingListingsOpen);
+  const housingToggle = el("housingBoard").previousElementSibling?.querySelector("button");
+  if (housingToggle) housingToggle.textContent = housingListingsOpen ? "Hide rentals" : "Show rentals";
   el("lifeRentPerDay").textContent = rentPerDay;
   el("lifeRentDue").textContent = rentDue;
   el("lifeRentStatus").textContent = rentDue > 0 ? "Unpaid" : "Paid";
@@ -371,6 +399,58 @@ function renderLife() {
   }
 }
 
+function renderProperties() {
+  const panel = el("propertyPanel");
+  if (!STATE.user || !panel) return;
+  const properties = STATE.properties || { listings: [], owned: [], value: 0, incomePerDay: 0 };
+  const listings = Array.isArray(properties.listings) ? properties.listings : [];
+  const owned = Array.isArray(properties.owned) ? properties.owned : [];
+  el("propertyOwned").textContent = owned.length;
+  el("propertyValue").textContent = properties.value || 0;
+  el("propertyIncome").textContent = properties.incomePerDay || 0;
+  el("propertyToggle").textContent = propertyListingsOpen ? "Hide apartments" : "Show apartments";
+  el("propertyListings").classList.toggle("hidden", !propertyListingsOpen);
+  el("propertyListings").innerHTML = listings.map(item => {
+    const canBuy = Number(STATE.user.wallet) >= Number(item.price || 0) && !item.ownedCount;
+    const canRent = Number(STATE.user.wallet) >= Number(item.deposit || 0);
+    return `
+      <div class="propertyListing">
+        <div>
+          <b>${esc(item.name)}</b>
+          <span>${esc(item.area)} | floor ${item.floor} | comfort ${item.comfort}</span>
+          <small>${esc(item.description)}</small>
+        </div>
+        <div class="propertyNumbers">
+          <strong>${item.price}</strong>
+          <small>Rent ${item.rent}/day</small>
+          <small>Deposit ${item.deposit}</small>
+          <small>Income ${item.income}/day</small>
+        </div>
+        <div class="propertyActions">
+          <button onclick="propertyAction('buy','${esc(item.id)}')" ${canBuy ? "" : "disabled"}>${item.ownedCount ? "Owned" : "Buy"}</button>
+          <button class="secondary" onclick="propertyAction('rentHome','${esc(item.id)}')" ${canRent ? "" : "disabled"}>Rent home</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  el("ownedProperties").innerHTML = owned.length ? owned.map(item => `
+    <div class="ownedProperty ${item.rentedOut ? "rented" : ""}">
+      <div>
+        <b>${esc(item.name)}</b>
+        <span>${esc(item.area)} | floor ${item.floor} | comfort ${item.comfort}</span>
+      </div>
+      <div>
+        <strong>${item.rentedOut ? `+${item.income}/day` : "Idle"}</strong>
+        <small>${item.rentedOut ? "Rented out" : "Not rented"}</small>
+      </div>
+      <button class="secondary" onclick="propertyAction('toggleRentOut','${esc(item.propertyId)}','${esc(item.id)}')">
+        ${item.rentedOut ? "Stop rent" : "Rent out"}
+      </button>
+    </div>
+  `).join("") : `<div class="propertyEmpty">No owned apartments</div>`;
+}
+
 function renderWorkQuest() {
   const panel = el("workPanel");
   if (!panel) return;
@@ -417,7 +497,10 @@ function renderWorkQuest() {
   }
 
   workRefreshQueued = false;
-  completeButton.disabled = !ready;
+  const progress = Number(quest.progress || 0);
+  const stepsRequired = Math.max(1, Number(quest.stepsRequired || 1));
+  const taskDone = progress >= stepsRequired;
+  completeButton.disabled = !ready || !taskDone;
   completeButton.textContent = ready ? `Collect ${quest.reward}` : "Waiting";
   box.innerHTML = `
     <div class="questTop">
@@ -429,9 +512,15 @@ function renderWorkQuest() {
       <b>Task</b>
       <span>${esc(quest.objective)}</span>
     </div>
+    <div class="workProgress">
+      <span>${esc(quest.taskPrompt || "Do work step")}</span>
+      <b>${progress}/${stepsRequired}</b>
+      <i><em style="width:${Math.min(100, Math.round((progress / stepsRequired) * 100))}%"></em></i>
+      <button class="secondary" onclick="doWorkTask()" ${ready && !taskDone ? "" : "disabled"}>Do task</button>
+    </div>
     <div class="questMeta">
       <span>Reward <b>${quest.reward}</b></span>
-      <span>Ready</span>
+      <span>${taskDone ? "Ready" : "Task required"}</span>
     </div>
   `;
 }
@@ -671,6 +760,16 @@ async function completeWorkQuest() {
   try {
     const result = await api("/api/work", { action: "complete" });
     log(`Work quest earned ${result.reward}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function doWorkTask() {
+  try {
+    const result = await api("/api/work", { action: "task" });
+    log(`Work task ${result.quest.progress}/${result.quest.stepsRequired}`);
     await loadState();
   } catch (error) {
     alert(error.message);

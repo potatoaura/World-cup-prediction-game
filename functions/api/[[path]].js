@@ -78,6 +78,7 @@ const MARKET_ASSETS = [
 const MARKET_TICK_SECONDS = 45;
 const MARKET_HISTORY_POINTS = 20;
 const MARKET_MIN_BASE_RATIO = 0.12;
+const DEFAULT_DAY_LENGTH_SECONDS = 600;
 const HUNGER_DECAY_PER_DAY = 18;
 const THIRST_DECAY_PER_DAY = 24;
 
@@ -159,6 +160,129 @@ const HOUSING_LISTINGS = [
   },
 ];
 
+const PROPERTY_LISTINGS = [
+  {
+    id: "micro_loft",
+    name: "Micro Loft",
+    area: "South Yard",
+    floor: 1,
+    comfort: 18,
+    price: 100000,
+    rent: 170,
+    deposit: 510,
+    income: 420,
+    description: "Small first-floor apartment with basic repairs and stable demand.",
+  },
+  {
+    id: "market_studio",
+    name: "Market Studio",
+    area: "Market Street",
+    floor: 3,
+    comfort: 24,
+    price: 135000,
+    rent: 230,
+    deposit: 690,
+    income: 560,
+    description: "Compact studio near shops, good for short rentals.",
+  },
+  {
+    id: "river_flat",
+    name: "River Flat",
+    area: "River Walk",
+    floor: 5,
+    comfort: 31,
+    price: 180000,
+    rent: 310,
+    deposit: 930,
+    income: 760,
+    description: "Bright one-bedroom flat with a better view and safer entrance.",
+  },
+  {
+    id: "arena_two_room",
+    name: "Arena Two-Room",
+    area: "Stadium District",
+    floor: 7,
+    comfort: 42,
+    price: 260000,
+    rent: 460,
+    deposit: 1380,
+    income: 1120,
+    description: "Two rooms near the arena, expensive on match weeks.",
+  },
+  {
+    id: "business_suite",
+    name: "Business Suite",
+    area: "Central Blocks",
+    floor: 9,
+    comfort: 55,
+    price: 390000,
+    rent: 690,
+    deposit: 2070,
+    income: 1680,
+    description: "Clean business apartment with strong rent-out potential.",
+  },
+  {
+    id: "garden_apartment",
+    name: "Garden Apartment",
+    area: "Hill Road",
+    floor: 2,
+    comfort: 68,
+    price: 560000,
+    rent: 980,
+    deposit: 2940,
+    income: 2360,
+    description: "Quiet apartment beside private gardens and better neighbors.",
+  },
+  {
+    id: "tower_view",
+    name: "Tower View",
+    area: "Tower Lane",
+    floor: 14,
+    comfort: 82,
+    price: 840000,
+    rent: 1460,
+    deposit: 4380,
+    income: 3520,
+    description: "High-floor apartment with a premium city view.",
+  },
+  {
+    id: "executive_floor",
+    name: "Executive Floor",
+    area: "Financial Plaza",
+    floor: 18,
+    comfort: 96,
+    price: 1250000,
+    rent: 2180,
+    deposit: 6540,
+    income: 5260,
+    description: "Large executive apartment with concierge service.",
+  },
+  {
+    id: "sky_residence",
+    name: "Sky Residence",
+    area: "Tower Lane",
+    floor: 28,
+    comfort: 120,
+    price: 1900000,
+    rent: 3300,
+    deposit: 9900,
+    income: 7950,
+    description: "Luxury residence for rich players and high-status tenants.",
+  },
+  {
+    id: "royal_penthouse",
+    name: "Royal Penthouse",
+    area: "Arena Heights",
+    floor: 36,
+    comfort: 160,
+    price: 3000000,
+    rent: 5200,
+    deposit: 15600,
+    income: 12400,
+    description: "Top penthouse with the highest comfort and rental income.",
+  },
+];
+
 function initialMarketTickOffset(symbol) {
   const hash = [...symbol].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
   return 5 + (hash % Math.max(1, MARKET_TICK_SECONDS - 10));
@@ -181,6 +305,7 @@ export async function onRequest(context) {
   const fixedWorkWaitSeconds = positiveEnvInt(env.WORK_WAIT_SECONDS, 0);
   const minWorkWaitSeconds = positiveEnvInt(env.WORK_WAIT_MIN_SECONDS, 120);
   const maxWorkWaitSeconds = Math.max(minWorkWaitSeconds, positiveEnvInt(env.WORK_WAIT_MAX_SECONDS, 600));
+  const dayLengthSeconds = positiveEnvInt(env.DAY_LENGTH_SECONDS, DEFAULT_DAY_LENGTH_SECONDS);
   const cookieAttrs = `HttpOnly; Path=/; SameSite=Lax${url.protocol === "https:" ? "; Secure" : ""}`;
 
   const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
@@ -365,16 +490,140 @@ export async function onRequest(context) {
     const key = housingKey(value);
     return HOUSING_LISTINGS.find(listing => (
       listing.id === key || housingKey(listing.name) === key
-    )) || HOUSING_LISTINGS[0];
+    )) || PROPERTY_LISTINGS.find(listing => listing.id === key) || HOUSING_LISTINGS[0];
   }
 
   function housingListing(housingId) {
     const key = housingKey(housingId);
-    return HOUSING_LISTINGS.find(listing => listing.id === key) || null;
+    return HOUSING_LISTINGS.find(listing => listing.id === key)
+      || PROPERTY_LISTINGS.find(listing => listing.id === key)
+      || null;
   }
 
   function publicHousingListings() {
     return HOUSING_LISTINGS.map(listing => ({ ...listing }));
+  }
+
+  function propertyListing(propertyId) {
+    const key = housingKey(propertyId);
+    return PROPERTY_LISTINGS.find(listing => listing.id === key) || null;
+  }
+
+  function publicPropertyListing(listing, ownedCount = 0) {
+    return {
+      id: listing.id,
+      name: listing.name,
+      area: listing.area,
+      floor: listing.floor,
+      comfort: listing.comfort,
+      price: listing.price,
+      rent: listing.rent,
+      deposit: listing.deposit,
+      income: listing.income,
+      description: listing.description,
+      ownedCount,
+    };
+  }
+
+  async function propertyState(userId) {
+    const rows = await DB.prepare(`
+      SELECT id, property_id, rented_out, created_at
+      FROM owned_properties
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `).bind(userId).all();
+    const owned = rows.results
+      .map(row => {
+        const listing = propertyListing(row.property_id);
+        if (!listing) return null;
+        return {
+          ...publicPropertyListing(listing),
+          id: row.id,
+          propertyId: row.property_id,
+          rentedOut: !!row.rented_out,
+          createdAt: Number(row.created_at),
+        };
+      })
+      .filter(Boolean);
+    const ownedCounts = owned.reduce((counts, item) => {
+      counts[item.propertyId] = (counts[item.propertyId] || 0) + 1;
+      return counts;
+    }, {});
+    return {
+      listings: PROPERTY_LISTINGS.map(listing => publicPropertyListing(listing, ownedCounts[listing.id] || 0)),
+      owned,
+      value: owned.reduce((sum, item) => sum + item.price, 0),
+      incomePerDay: owned.reduce((sum, item) => sum + (item.rentedOut ? item.income : 0), 0),
+    };
+  }
+
+  async function propertyIncomePerDay(userId) {
+    const rows = await DB.prepare("SELECT property_id FROM owned_properties WHERE user_id = ? AND rented_out = 1")
+      .bind(userId).all();
+    return rows.results.reduce((sum, row) => sum + Number(propertyListing(row.property_id)?.income || 0), 0);
+  }
+
+  async function userById(userId) {
+    return await DB.prepare(`
+      SELECT users.*,
+        CASE WHEN bans.user_id IS NULL THEN 0 ELSE 1 END AS banned,
+        bans.reason AS ban_reason
+      FROM users
+      LEFT JOIN bans ON bans.user_id = users.id
+      WHERE users.id = ?
+    `).bind(userId).first();
+  }
+
+  async function applyAutomaticDays(user) {
+    const current = nowSeconds();
+    const lastDailyAt = Number(user.last_daily_at || 0);
+    if (lastDailyAt <= 0) {
+      await DB.prepare("UPDATE users SET last_daily_at = ? WHERE id = ?")
+        .bind(current, user.id).run();
+      return { ...user, last_daily_at: current };
+    }
+    const elapsed = current - lastDailyAt;
+    const days = Math.min(7, Math.floor(elapsed / dayLengthSeconds));
+    if (days < 1) return user;
+
+    await advanceUserDays(user, days, current);
+    return await userById(user.id);
+  }
+
+  async function advanceUserDays(user, days, current) {
+    let debt = Number(user.debt || 0);
+    let rating = Number(user.rating || 700);
+    let due = user.loan_due;
+    let day = Number(user.day || 0);
+    let hunger = Number(user.hunger ?? 100);
+    let thirst = Number(user.thirst ?? 100);
+    let rentDue = Number(user.rent_due || 0);
+    let wallet = Number(user.wallet || 0);
+    const incomePerDay = await propertyIncomePerDay(user.id);
+    const housing = selectedHousing(user.housing);
+
+    for (let index = 0; index < days; index++) {
+      day += 1;
+      hunger = Math.max(0, hunger - HUNGER_DECAY_PER_DAY);
+      thirst = Math.max(0, thirst - THIRST_DECAY_PER_DAY);
+      rentDue += Number(housing.rent || 0);
+      wallet += incomePerDay;
+      if (debt > 0 && due !== null && day > due) {
+        rating = Math.max(300, rating - 50);
+        debt = Math.ceil(debt * 1.15);
+        due = day + 2;
+      }
+      if (hunger <= 0) rating = Math.max(300, rating - 15);
+      if (thirst <= 0) rating = Math.max(300, rating - 20);
+      if (rentDue >= Math.max(100, Number(housing.rent || 0) * 4)) rating = Math.max(300, rating - 10);
+    }
+
+    await DB.prepare(`
+      UPDATE users
+      SET wallet = ?, day = ?, debt = ?, rating = ?, loan_due = ?,
+        hunger = ?, thirst = ?, rent_due = ?, housing = ?, last_daily_at = ?
+      WHERE id = ?
+    `).bind(wallet, day, debt, rating, due, hunger, thirst, rentDue, housing.id, current, user.id).run();
   }
 
   function reason(value) {
@@ -392,6 +641,22 @@ export async function onRequest(context) {
 
   function pickWorkQuest() {
     return WORK_QUEST_POOL[Math.floor(Math.random() * WORK_QUEST_POOL.length)];
+  }
+
+  function workStepsForDifficulty(difficulty) {
+    return ({
+      Easy: 2,
+      Standard: 3,
+      Hard: 4,
+      Elite: 5,
+    })[difficulty] || 3;
+  }
+
+  function workTaskPrompt(quest) {
+    if (quest.difficulty === "Elite") return "Coordinate shift";
+    if (quest.difficulty === "Hard") return "Finish assignment";
+    if (quest.difficulty === "Standard") return "Do work step";
+    return "Handle small task";
   }
 
   function pickWorkWaitSeconds() {
@@ -419,6 +684,9 @@ export async function onRequest(context) {
       difficulty: quest.difficulty,
       description: quest.description || "A local business needs a quick job finished.",
       objective: quest.objective || "Complete the assignment and return for payout.",
+      taskPrompt: quest.task_prompt || workTaskPrompt(quest),
+      progress: Number(quest.progress || 0),
+      stepsRequired: Number(quest.steps_required || workStepsForDifficulty(quest.difficulty)),
       reward: Number(quest.reward),
       completedAt: quest.completed_at === null || quest.completed_at === undefined ? null : Number(quest.completed_at),
     };
@@ -615,7 +883,8 @@ export async function onRequest(context) {
     };
   }
 
-  const user = await currentUser();
+  let user = await currentUser();
+  if (user) user = await applyAutomaticDays(user);
 
   if (path === "/state") {
     const leaders = await DB.prepare(`
@@ -635,6 +904,7 @@ export async function onRequest(context) {
     if (user) {
       response.activeQuest = publicWorkQuest(await activeWorkQuest(user.id));
       response.market = await marketState(user.id);
+      response.properties = await propertyState(user.id);
     }
     if (user?.is_admin) response.adminUsers = await adminUsers();
     return json(response);
@@ -704,6 +974,9 @@ export async function onRequest(context) {
         difficulty: selected.difficulty,
         description: selected.description,
         objective: selected.objective,
+        task_prompt: workTaskPrompt(selected),
+        steps_required: workStepsForDifficulty(selected.difficulty),
+        progress: 0,
         reward: selected.reward,
         status: "posted",
         created_at: createdAt,
@@ -711,8 +984,11 @@ export async function onRequest(context) {
         completed_at: null,
       };
       await DB.prepare(`
-        INSERT INTO work_quests (id, user_id, title, difficulty, description, objective, reward, status, available_at, completed_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO work_quests (
+          id, user_id, title, difficulty, description, objective, task_prompt,
+          steps_required, progress, reward, status, available_at, completed_at, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         quest.id,
         quest.user_id,
@@ -720,6 +996,9 @@ export async function onRequest(context) {
         quest.difficulty,
         quest.description,
         quest.objective,
+        quest.task_prompt,
+        quest.steps_required,
+        quest.progress,
         quest.reward,
         quest.status,
         quest.available_at,
@@ -727,6 +1006,39 @@ export async function onRequest(context) {
         quest.created_at,
       ).run();
       return json({ ok: true, quest: publicWorkQuest(quest) });
+    }
+
+    if (action === "task") {
+      const quest = await activeWorkQuest(user.id);
+      if (!quest) return json({ error: "No active work quest" }, 400);
+      if (Number(user.hunger ?? 100) <= 0) {
+        return json({ error: "Eat food before doing work", quest: publicWorkQuest(quest) }, 400);
+      }
+      if (Number(user.thirst ?? 100) <= 0) {
+        return json({ error: "Drink water before doing work", quest: publicWorkQuest(quest) }, 400);
+      }
+
+      const current = nowSeconds();
+      if (Math.max(0, Number(quest.available_at) - current) > 0) {
+        return json({ error: "Quest not ready", quest: publicWorkQuest(quest) }, 400);
+      }
+
+      const stepsRequired = Number(quest.steps_required || workStepsForDifficulty(quest.difficulty));
+      const progress = Math.min(stepsRequired, Number(quest.progress || 0) + 1);
+      const nextHunger = Math.max(0, Number(user.hunger ?? 100) - 1);
+      const nextThirst = Math.max(0, Number(user.thirst ?? 100) - 1);
+      await DB.batch([
+        DB.prepare("UPDATE work_quests SET progress = ? WHERE id = ? AND user_id = ? AND status = 'posted'")
+          .bind(progress, quest.id, user.id),
+        DB.prepare("UPDATE users SET hunger = ?, thirst = ? WHERE id = ?")
+          .bind(nextHunger, nextThirst, user.id),
+      ]);
+      return json({
+        ok: true,
+        quest: publicWorkQuest({ ...quest, progress }),
+        hunger: nextHunger,
+        thirst: nextThirst,
+      });
     }
 
     if (action === "complete") {
@@ -743,6 +1055,10 @@ export async function onRequest(context) {
       const remainingSeconds = Math.max(0, Number(quest.available_at) - current);
       if (remainingSeconds > 0) {
         return json({ error: "Quest not ready", quest: publicWorkQuest(quest) }, 400);
+      }
+      const stepsRequired = Number(quest.steps_required || workStepsForDifficulty(quest.difficulty));
+      if (Number(quest.progress || 0) < stepsRequired) {
+        return json({ error: "Finish the work task first", quest: publicWorkQuest(quest) }, 400);
       }
 
       const reward = Number(quest.reward);
@@ -839,6 +1155,49 @@ export async function onRequest(context) {
     }
 
     return json({ error: "Bad life action" }, 400);
+  }
+
+  if (path === "/property" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+
+    if (action === "buy") {
+      const listing = propertyListing(data.propertyId);
+      if (!listing) return json({ error: "Property not found" }, 404);
+      if (listing.price > user.wallet) return json({ error: `Need ${listing.price} wallet to buy` }, 400);
+      const existing = await DB.prepare("SELECT id FROM owned_properties WHERE user_id = ? AND property_id = ?")
+        .bind(user.id, listing.id).first();
+      if (existing) return json({ error: "Property already owned" }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(listing.price, user.id),
+        DB.prepare(`
+          INSERT INTO owned_properties (id, user_id, property_id, rented_out, created_at)
+          VALUES (?, ?, ?, 0, ?)
+        `).bind(crypto.randomUUID(), user.id, listing.id, nowSeconds()),
+      ]);
+      return json({ ok: true, action, property: publicPropertyListing(listing), properties: await propertyState(user.id) });
+    }
+
+    if (action === "rentHome") {
+      const listing = propertyListing(data.propertyId);
+      if (!listing) return json({ error: "Property not found" }, 404);
+      if (listing.deposit > user.wallet) return json({ error: `Need ${listing.deposit} wallet for deposit` }, 400);
+      await DB.prepare("UPDATE users SET wallet = wallet - ?, housing = ? WHERE id = ?")
+        .bind(listing.deposit, listing.id, user.id).run();
+      return json({ ok: true, action, housing: publicPropertyListing(listing) });
+    }
+
+    if (action === "toggleRentOut") {
+      const owned = await DB.prepare("SELECT * FROM owned_properties WHERE id = ? AND user_id = ?")
+        .bind(data.ownedId, user.id).first();
+      if (!owned) return json({ error: "Owned property not found" }, 404);
+      const rentedOut = Number(owned.rented_out || 0) ? 0 : 1;
+      await DB.prepare("UPDATE owned_properties SET rented_out = ? WHERE id = ? AND user_id = ?")
+        .bind(rentedOut, owned.id, user.id).run();
+      return json({ ok: true, action, rentedOut: !!rentedOut, properties: await propertyState(user.id) });
+    }
+
+    return json({ error: "Bad property action" }, 400);
   }
 
   if (path.startsWith("/market/") && request.method === "GET") {
@@ -975,24 +1334,7 @@ export async function onRequest(context) {
       await DB.prepare("UPDATE users SET wallet=wallet-?, debt=?, rating=?, loan_due=? WHERE id=?")
         .bind(paid, newDebt, newRating, newDebt === 0 ? null : user.loan_due, user.id).run();
     } else if (action === "nextDay") {
-      let debt = user.debt;
-      let rating = user.rating;
-      let due = user.loan_due;
-      const day = user.day + 1;
-      const housing = selectedHousing(user.housing);
-      const hunger = Math.max(0, Number(user.hunger ?? 100) - HUNGER_DECAY_PER_DAY);
-      const thirst = Math.max(0, Number(user.thirst ?? 100) - THIRST_DECAY_PER_DAY);
-      const rentDue = Number(user.rent_due ?? 0) + housing.rent;
-      if (debt > 0 && due !== null && day > due) {
-        rating = Math.max(300, rating - 50);
-        debt = Math.ceil(debt * 1.15);
-        due = day + 2;
-      }
-      if (hunger <= 0) rating = Math.max(300, rating - 15);
-      if (thirst <= 0) rating = Math.max(300, rating - 20);
-      if (rentDue >= Math.max(100, housing.rent * 4)) rating = Math.max(300, rating - 10);
-      await DB.prepare("UPDATE users SET day=?, debt=?, rating=?, loan_due=?, hunger=?, thirst=?, rent_due=?, housing=? WHERE id=?")
-        .bind(day, debt, rating, due, hunger, thirst, rentDue, housing.id, user.id).run();
+      await advanceUserDays(user, 1, nowSeconds());
     } else {
       return json({ error: "Bad action" }, 400);
     }
@@ -1178,6 +1520,16 @@ async function ensureRuntimeTables(DB) {
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_work_quests_user_status ON work_quests(user_id, status)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_work_quests_available_at ON work_quests(available_at)"),
     DB.prepare(`
+      CREATE TABLE IF NOT EXISTS owned_properties (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        property_id TEXT NOT NULL,
+        rented_out INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_owned_properties_user ON owned_properties(user_id)"),
+    DB.prepare(`
       CREATE TABLE IF NOT EXISTS market_assets (
         symbol TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -1242,8 +1594,12 @@ async function ensureRuntimeTables(DB) {
   await ensureTableColumn(DB, "users", "cake", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "users", "rent_due", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "users", "housing", "TEXT NOT NULL DEFAULT 'room'");
+  await ensureTableColumn(DB, "users", "last_daily_at", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "work_quests", "description", "TEXT NOT NULL DEFAULT ''");
   await ensureTableColumn(DB, "work_quests", "objective", "TEXT NOT NULL DEFAULT ''");
+  await ensureTableColumn(DB, "work_quests", "task_prompt", "TEXT NOT NULL DEFAULT ''");
+  await ensureTableColumn(DB, "work_quests", "steps_required", "INTEGER NOT NULL DEFAULT 3");
+  await ensureTableColumn(DB, "work_quests", "progress", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "market_assets", "tick_offset", "INTEGER NOT NULL DEFAULT 0");
   await DB.batch(MARKET_ASSETS.map(asset => DB.prepare(`
     UPDATE market_assets
