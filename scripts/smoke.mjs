@@ -10,6 +10,15 @@ const stamp = Date.now();
 const persistTo = path.join(".wrangler", `smoke-${stamp}`);
 const port = await getFreePort();
 const baseUrl = `http://127.0.0.1:${port}`;
+const workAnswersByTitle = {
+  "Deliver stadium flyers": ["route_market", "stacks_5"],
+  "Clean a snack kiosk": ["grill_power", "clean_correct"],
+  "Repair betting terminals": ["network_cable", "printer_clear", "terminal_demo"],
+  "Guard VIP parking": ["pass_hold", "lane_clear", "plate_verify"],
+  "Audit casino receipts": ["audit_5_over", "audit_duplicate", "cash_225", "card_exception"],
+  "Recover missing sponsor files": ["files_call", "files_location", "files_escalate", "files_receipt"],
+  "Run a private finals event": ["event_verify", "event_catering", "event_exit", "event_entry", "event_close"],
+};
 
 function runNpx(args) {
   return new Promise((resolve, reject) => {
@@ -302,8 +311,11 @@ try {
   assert(storeReady.store.name === "Smoke Market", "store rename did not persist");
   assert(storeReady.store.products.find(item => item.id === "bread")?.stock === 20, "store stock did not persist");
   assert(storeReady.store.products.find(item => item.id === "water")?.unlocked === false, "fridge product unlocked without fridge");
-  await delay(4200);
-  const storeAfterSales = await request("/api/state", { session: storeOwner });
+  let storeAfterSales;
+  for (let index = 0; index < 4; index++) {
+    await delay(1100);
+    storeAfterSales = await request("/api/state", { session: storeOwner });
+  }
   assert(storeAfterSales.store.lifetimeRevenue > 0, "automatic store sales produced no revenue");
   assert(storeAfterSales.store.products.find(item => item.id === "bread")?.stock < 20, "automatic store sales did not reduce stock");
   assert(storeAfterSales.store.recentSales.length > 0, "store sales history missing");
@@ -407,18 +419,40 @@ try {
   assert(readyWorkState.activeQuest.objective, "revealed work quest did not include objective");
   assert(readyWorkState.activeQuest.stepsRequired > 0, "revealed work quest did not include required steps");
   assert(readyWorkState.activeQuest.progress === 0, "new work quest should start with zero progress");
+  assert(readyWorkState.activeQuest.mistakes === 0, "new work quest should start with zero mistakes");
+  assert(readyWorkState.activeQuest.challenge?.options?.length >= 3, "work challenge options missing");
+  assert(
+    readyWorkState.activeQuest.challenge.options.every(option => !("answer" in option)),
+    "work challenge leaked its correct answer"
+  );
   await expectError(400, "/api/work", {
     method: "POST",
     body: { action: "complete" },
     session: borrower,
   });
+  const workAnswers = workAnswersByTitle[readyWorkState.activeQuest.title];
+  assert(workAnswers?.length === readyWorkState.activeQuest.stepsRequired, "smoke answers missing for work quest");
+  await expectError(400, "/api/work", {
+    method: "POST",
+    body: { action: "task" },
+    session: borrower,
+  });
+  const wrongAnswer = readyWorkState.activeQuest.challenge.options.find(option => option.id !== workAnswers[0]);
+  const wrongWork = await request("/api/work", {
+    method: "POST",
+    body: { action: "task", answer: wrongAnswer.id },
+    session: borrower,
+  });
+  assert(!wrongWork.correct && !wrongWork.failed, "wrong work answer should count as a recoverable mistake");
+  assert(wrongWork.quest.progress === 0 && wrongWork.quest.mistakes === 1, "wrong answer changed progress incorrectly");
   let workTaskResult;
   for (let index = 0; index < readyWorkState.activeQuest.stepsRequired; index++) {
     workTaskResult = await request("/api/work", {
       method: "POST",
-      body: { action: "task" },
+      body: { action: "task", answer: workAnswers[index] },
       session: borrower,
     });
+    assert(workTaskResult.correct, `correct work answer ${index + 1} was rejected`);
   }
   assert(
     workTaskResult.quest.progress === readyWorkState.activeQuest.stepsRequired,

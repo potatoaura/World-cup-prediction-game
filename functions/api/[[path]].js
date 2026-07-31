@@ -57,6 +57,253 @@ const WORK_QUEST_POOL = [
   },
 ];
 
+const WORK_CHALLENGES = {
+  "Deliver stadium flyers": [
+    {
+      prompt: "The north gate is closed. Which route reaches the fan zone without crossing the team entrance?",
+      options: [
+        { id: "route_market", label: "Market Street to the public west gate" },
+        { id: "route_tunnel", label: "Players tunnel under the north stand" },
+        { id: "route_pitch", label: "Cross the pitch before warm-up" },
+      ],
+      answer: "route_market",
+      success: "The first flyer bundle reached the public entrance.",
+    },
+    {
+      prompt: "You have 30 flyers and each handout stack holds 6. How many full stacks do you prepare?",
+      options: [
+        { id: "stacks_4", label: "4 stacks" },
+        { id: "stacks_5", label: "5 stacks" },
+        { id: "stacks_6", label: "6 stacks" },
+      ],
+      answer: "stacks_5",
+      success: "All 30 flyers are counted and ready.",
+    },
+  ],
+  "Clean a snack kiosk": [
+    {
+      prompt: "The grill is still hot. What is the first safe action before cleaning it?",
+      options: [
+        { id: "grill_power", label: "Switch it off and isolate the power" },
+        { id: "grill_water", label: "Pour cold water over the plate" },
+        { id: "grill_spray", label: "Spray cleaner while it is running" },
+      ],
+      answer: "grill_power",
+      success: "The grill is safely isolated.",
+    },
+    {
+      prompt: "A food counter has crumbs and grease. Which order passes inspection?",
+      options: [
+        { id: "clean_correct", label: "Remove debris, wash, sanitize, air-dry" },
+        { id: "clean_fast", label: "Sanitize, wipe with used towel, restock" },
+        { id: "clean_hide", label: "Cover the counter with paper" },
+      ],
+      answer: "clean_correct",
+      success: "The counter passes the hygiene check.",
+    },
+  ],
+  "Repair betting terminals": [
+    {
+      prompt: "Terminal 1 has power but shows NETWORK OFFLINE. What do you inspect first?",
+      options: [
+        { id: "network_cable", label: "Ethernet cable and link light" },
+        { id: "screen_brightness", label: "Screen brightness" },
+        { id: "receipt_roll", label: "Receipt paper roll" },
+      ],
+      answer: "network_cable",
+      success: "The loose network cable is reseated.",
+    },
+    {
+      prompt: "Terminal 2 prints half a ticket and reports PAPER JAM. What is the safe fix?",
+      options: [
+        { id: "printer_clear", label: "Open the latch and remove the torn paper" },
+        { id: "printer_pull", label: "Pull the paper while the printer runs" },
+        { id: "printer_ignore", label: "Disable ticket printing" },
+      ],
+      answer: "printer_clear",
+      success: "The printer path is clear and the roll is aligned.",
+    },
+    {
+      prompt: "All terminals are online. Which final test proves the repair is complete?",
+      options: [
+        { id: "terminal_demo", label: "Run and void one demo ticket on each terminal" },
+        { id: "terminal_restart", label: "Restart every terminal again" },
+        { id: "terminal_photo", label: "Take a photo of the screens" },
+      ],
+      answer: "terminal_demo",
+      success: "Every terminal completes the demo transaction.",
+    },
+  ],
+  "Guard VIP parking": [
+    {
+      prompt: "A pass has the correct logo but yesterday's date. What do you do?",
+      options: [
+        { id: "pass_hold", label: "Hold the car and verify the pass" },
+        { id: "pass_wave", label: "Wave it through because the logo is correct" },
+        { id: "pass_edit", label: "Change the date by hand" },
+      ],
+      answer: "pass_hold",
+      success: "The expired pass is sent for verification.",
+    },
+    {
+      prompt: "A delivery van stops in the marked emergency lane. What has priority?",
+      options: [
+        { id: "lane_clear", label: "Move the van to the loading bay immediately" },
+        { id: "lane_wait", label: "Let it unload for ten minutes" },
+        { id: "lane_cone", label: "Put a cone behind it and leave it" },
+      ],
+      answer: "lane_clear",
+      success: "The emergency route is clear.",
+    },
+    {
+      prompt: "The guest name matches, but the license plate does not. What is the correct response?",
+      options: [
+        { id: "plate_verify", label: "Call the supervisor before entry" },
+        { id: "plate_allow", label: "Allow entry on the guest name alone" },
+        { id: "plate_replace", label: "Write the new plate on the old pass" },
+      ],
+      answer: "plate_verify",
+      success: "The replacement vehicle is confirmed by the supervisor.",
+    },
+  ],
+  "Audit casino receipts": [
+    {
+      prompt: "Receipt batches total 42, 38, and 55. The drawer report says 140. What is the mismatch?",
+      options: [
+        { id: "audit_5_over", label: "Drawer is 5 over" },
+        { id: "audit_5_short", label: "Drawer is 5 short" },
+        { id: "audit_balanced", label: "No mismatch" },
+      ],
+      answer: "audit_5_over",
+      success: "The 5 credit overage is flagged.",
+    },
+    {
+      prompt: "Two receipts share the same transaction number but have different totals. What should be flagged?",
+      options: [
+        { id: "audit_duplicate", label: "Possible duplicate or altered receipt" },
+        { id: "audit_rounding", label: "Normal rounding difference" },
+        { id: "audit_ignore", label: "Nothing if both are signed" },
+      ],
+      answer: "audit_duplicate",
+      success: "The duplicate transaction is isolated.",
+    },
+    {
+      prompt: "Cash sales are 260 and refunds are 35. How much cash should remain from those transactions?",
+      options: [
+        { id: "cash_225", label: "225" },
+        { id: "cash_295", label: "295" },
+        { id: "cash_235", label: "235" },
+      ],
+      answer: "cash_225",
+      success: "The net cash total is correct.",
+    },
+    {
+      prompt: "A card payment appears in receipts but not in the payment terminal report. Where does it go?",
+      options: [
+        { id: "card_exception", label: "Payment exception report for investigation" },
+        { id: "card_cash", label: "Add it to the cash drawer total" },
+        { id: "card_delete", label: "Delete the receipt" },
+      ],
+      answer: "card_exception",
+      success: "The missing card settlement is documented.",
+    },
+  ],
+  "Recover missing sponsor files": [
+    {
+      prompt: "The sign-out sheet shows the courier took the folder last. What is your first move?",
+      options: [
+        { id: "files_call", label: "Call the courier using the logged job number" },
+        { id: "files_accuse", label: "Report the courier for theft immediately" },
+        { id: "files_copy", label: "Create a blank replacement folder" },
+      ],
+      answer: "files_call",
+      success: "The courier confirms the last delivery point.",
+    },
+    {
+      prompt: "You find the folder in an unlocked meeting room. What do you record before moving it?",
+      options: [
+        { id: "files_location", label: "Location, time, and who recovered it" },
+        { id: "files_contents", label: "Only the number of pages" },
+        { id: "files_nothing", label: "Nothing, return it quickly" },
+      ],
+      answer: "files_location",
+      success: "The recovery has a clear chain of custody.",
+    },
+    {
+      prompt: "One contract page is missing. What is the correct next step?",
+      options: [
+        { id: "files_escalate", label: "Seal the folder and report the missing page" },
+        { id: "files_guess", label: "Replace it with an older draft" },
+        { id: "files_return", label: "Return the incomplete folder silently" },
+      ],
+      answer: "files_escalate",
+      success: "The incomplete file is secured for review.",
+    },
+    {
+      prompt: "The sponsor desk accepts the recovered folder. What closes the task?",
+      options: [
+        { id: "files_receipt", label: "Get a signed handover receipt" },
+        { id: "files_photo", label: "Photograph the sponsor desk" },
+        { id: "files_leave", label: "Leave before they count the pages" },
+      ],
+      answer: "files_receipt",
+      success: "The handover is signed and complete.",
+    },
+  ],
+  "Run a private finals event": [
+    {
+      prompt: "Ten guests arrive but two names are missing from the list. What do you do?",
+      options: [
+        { id: "event_verify", label: "Hold entry and verify with the host" },
+        { id: "event_allow", label: "Allow them in with the group" },
+        { id: "event_charge", label: "Sell them replacement invitations" },
+      ],
+      answer: "event_verify",
+      success: "The host verifies the two additional guests.",
+    },
+    {
+      prompt: "Catering has 24 meals for 30 confirmed guests. What is the best immediate response?",
+      options: [
+        { id: "event_catering", label: "Order six fast replacement meals and delay service" },
+        { id: "event_smaller", label: "Make every meal smaller without telling guests" },
+        { id: "event_skip", label: "Serve only the first 24 guests" },
+      ],
+      answer: "event_catering",
+      success: "The meal shortage is covered before service.",
+    },
+    {
+      prompt: "A decoration blocks part of the emergency exit. What happens next?",
+      options: [
+        { id: "event_exit", label: "Remove it before opening the room" },
+        { id: "event_sign", label: "Add a sign pointing around it" },
+        { id: "event_ignore", label: "Leave it because the door still opens" },
+      ],
+      answer: "event_exit",
+      success: "The emergency exit is fully clear.",
+    },
+    {
+      prompt: "One helper is absent. Which post must remain staffed at all times?",
+      options: [
+        { id: "event_entry", label: "Guest entry and emergency contact point" },
+        { id: "event_coats", label: "Coat rack" },
+        { id: "event_screen", label: "Score display" },
+      ],
+      answer: "event_entry",
+      success: "Entry control remains covered.",
+    },
+    {
+      prompt: "The event is over and the cash box total matches receipts. What closes the shift?",
+      options: [
+        { id: "event_close", label: "Seal cash, sign the report, and hand over keys" },
+        { id: "event_keys", label: "Take the keys home for safety" },
+        { id: "event_later", label: "Leave the cash count for tomorrow" },
+      ],
+      answer: "event_close",
+      success: "The event closes with a complete handover.",
+    },
+  ],
+};
+
 const MARKET_ASSETS = [
   { symbol: "BANK", name: "Credit Bank", price: 85, volatility: 7 },
   { symbol: "CLUB", name: "Football Club", price: 120, volatility: 14 },
@@ -702,9 +949,7 @@ export async function onRequest(context) {
     );
     const customerCount = Math.min(totalStock, Math.floor(ticks * traffic));
     if (customerCount < 1) {
-      await DB.prepare("UPDATE retail_stores SET last_sales_at = ? WHERE user_id = ?")
-        .bind(processedAt, userId).run();
-      return { ...store, last_sales_at: processedAt };
+      return store;
     }
 
     const sold = {};
@@ -948,6 +1193,22 @@ export async function onRequest(context) {
     return "Handle small task";
   }
 
+  function workChallenge(quest) {
+    const challenges = WORK_CHALLENGES[quest.title] || WORK_CHALLENGES["Repair betting terminals"];
+    const progress = Number(quest.progress || 0);
+    return challenges[Math.min(progress, challenges.length - 1)];
+  }
+
+  function publicWorkChallenge(quest) {
+    const stepsRequired = Number(quest.steps_required || workStepsForDifficulty(quest.difficulty));
+    if (Number(quest.progress || 0) >= stepsRequired || quest.status !== "posted") return null;
+    const challenge = workChallenge(quest);
+    return {
+      prompt: challenge.prompt,
+      options: challenge.options.map(option => ({ id: option.id, label: option.label })),
+    };
+  }
+
   function pickWorkWaitSeconds() {
     if (fixedWorkWaitSeconds > 0) return fixedWorkWaitSeconds;
     return minWorkWaitSeconds + Math.floor(Math.random() * (maxWorkWaitSeconds - minWorkWaitSeconds + 1));
@@ -976,6 +1237,9 @@ export async function onRequest(context) {
       taskPrompt: quest.task_prompt || workTaskPrompt(quest),
       progress: Number(quest.progress || 0),
       stepsRequired: Number(quest.steps_required || workStepsForDifficulty(quest.difficulty)),
+      mistakes: Number(quest.mistakes || 0),
+      maxMistakes: 3,
+      challenge: publicWorkChallenge(quest),
       reward: Number(quest.reward),
       completedAt: quest.completed_at === null || quest.completed_at === undefined ? null : Number(quest.completed_at),
     };
@@ -1316,9 +1580,37 @@ export async function onRequest(context) {
       }
 
       const stepsRequired = Number(quest.steps_required || workStepsForDifficulty(quest.difficulty));
-      const progress = Math.min(stepsRequired, Number(quest.progress || 0) + 1);
+      if (Number(quest.progress || 0) >= stepsRequired) {
+        return json({ error: "Work task already finished", quest: publicWorkQuest(quest) }, 400);
+      }
+      const challenge = workChallenge(quest);
+      const answer = String(data.answer || "");
+      if (!challenge.options.some(option => option.id === answer)) {
+        return json({ error: "Choose an answer for the task", quest: publicWorkQuest(quest) }, 400);
+      }
       const nextHunger = Math.max(0, Number(user.hunger ?? 100) - 1);
       const nextThirst = Math.max(0, Number(user.thirst ?? 100) - 1);
+      if (answer !== challenge.answer) {
+        const mistakes = Number(quest.mistakes || 0) + 1;
+        const failed = mistakes >= 3;
+        await DB.batch([
+          DB.prepare("UPDATE work_quests SET mistakes = ?, status = ? WHERE id = ? AND user_id = ? AND status = 'posted'")
+            .bind(mistakes, failed ? "failed" : "posted", quest.id, user.id),
+          DB.prepare("UPDATE users SET hunger = ?, thirst = ? WHERE id = ?")
+            .bind(nextHunger, nextThirst, user.id),
+        ]);
+        return json({
+          ok: true,
+          correct: false,
+          failed,
+          feedback: failed ? "Third mistake. The client cancelled the job." : "Wrong decision. Check the task and try again.",
+          quest: publicWorkQuest({ ...quest, mistakes, status: failed ? "failed" : "posted" }),
+          hunger: nextHunger,
+          thirst: nextThirst,
+        });
+      }
+
+      const progress = Math.min(stepsRequired, Number(quest.progress || 0) + 1);
       await DB.batch([
         DB.prepare("UPDATE work_quests SET progress = ? WHERE id = ? AND user_id = ? AND status = 'posted'")
           .bind(progress, quest.id, user.id),
@@ -1327,6 +1619,8 @@ export async function onRequest(context) {
       ]);
       return json({
         ok: true,
+        correct: true,
+        feedback: challenge.success,
         quest: publicWorkQuest({ ...quest, progress }),
         hunger: nextHunger,
         thirst: nextThirst,
@@ -1888,6 +2182,7 @@ async function ensureRuntimeTables(DB) {
         difficulty TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
         objective TEXT NOT NULL DEFAULT '',
+        mistakes INTEGER NOT NULL DEFAULT 0,
         reward INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'posted',
         available_at INTEGER NOT NULL,
@@ -2015,6 +2310,7 @@ async function ensureRuntimeTables(DB) {
   await ensureTableColumn(DB, "work_quests", "task_prompt", "TEXT NOT NULL DEFAULT ''");
   await ensureTableColumn(DB, "work_quests", "steps_required", "INTEGER NOT NULL DEFAULT 3");
   await ensureTableColumn(DB, "work_quests", "progress", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "work_quests", "mistakes", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "market_assets", "tick_offset", "INTEGER NOT NULL DEFAULT 0");
   await DB.batch(MARKET_ASSETS.map(asset => DB.prepare(`
     UPDATE market_assets

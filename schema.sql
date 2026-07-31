@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS work_quests (
   task_prompt TEXT NOT NULL DEFAULT '',
   steps_required INTEGER NOT NULL DEFAULT 3,
   progress INTEGER NOT NULL DEFAULT 0,
+  mistakes INTEGER NOT NULL DEFAULT 0,
   reward INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'posted',
   available_at INTEGER NOT NULL,

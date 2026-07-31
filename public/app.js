@@ -755,6 +755,7 @@ function renderWorkQuest() {
   const progress = Number(quest.progress || 0);
   const stepsRequired = Math.max(1, Number(quest.stepsRequired || 1));
   const taskDone = progress >= stepsRequired;
+  const mistakes = Number(quest.mistakes || 0);
   completeButton.disabled = !ready || !taskDone;
   completeButton.textContent = ready ? `Collect ${quest.reward}` : "Waiting";
   box.innerHTML = `
@@ -768,11 +769,22 @@ function renderWorkQuest() {
       <span>${esc(quest.objective)}</span>
     </div>
     <div class="workProgress">
-      <span>${esc(quest.taskPrompt || "Do work step")}</span>
+      <span>Case progress</span>
       <b>${progress}/${stepsRequired}</b>
       <i><em style="width:${Math.min(100, Math.round((progress / stepsRequired) * 100))}%"></em></i>
-      <button class="secondary" onclick="doWorkTask()" ${ready && !taskDone ? "" : "disabled"}>Do task</button>
+      <small class="workMistakes ${mistakes >= 2 ? "danger" : ""}">Mistakes ${mistakes}/${quest.maxMistakes || 3}</small>
     </div>
+    ${!taskDone && quest.challenge ? `
+      <div class="workChallenge">
+        <span>DECISION ${progress + 1}</span>
+        <b>${esc(quest.challenge.prompt)}</b>
+        <div class="workAnswers">
+          ${(quest.challenge.options || []).map(option => `
+            <button class="secondary" onclick="submitWorkAnswer('${esc(option.id)}')">${esc(option.label)}</button>
+          `).join("")}
+        </div>
+      </div>
+    ` : `<div class="workReady">Assignment complete. Collect the payment.</div>`}
     <div class="questMeta">
       <span>Reward <b>${quest.reward}</b></span>
       <span>${taskDone ? "Ready" : "Task required"}</span>
@@ -1059,10 +1071,11 @@ async function completeWorkQuest() {
   }
 }
 
-async function doWorkTask() {
+async function submitWorkAnswer(answer) {
   try {
-    const result = await api("/api/work", { action: "task" });
-    log(`Work task ${result.quest.progress}/${result.quest.stepsRequired}`);
+    const result = await api("/api/work", { action: "task", answer });
+    log(result.correct ? result.feedback : `Work mistake: ${result.feedback}`);
+    if (!result.correct) alert(result.feedback);
     await loadState();
   } catch (error) {
     alert(error.message);
