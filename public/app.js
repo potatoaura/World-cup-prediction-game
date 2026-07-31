@@ -8,8 +8,17 @@ let lastWorkPollAt = 0;
 let marketDetailSymbol = "";
 let marketDetail = null;
 let marketDetailLoading = false;
+let marketDetailRange = "all";
 let housingListingsOpen = false;
 let propertyListingsOpen = false;
+
+const MARKET_DETAIL_RANGES = [
+  { id: "5m", label: "5M", seconds: 5 * 60 },
+  { id: "30m", label: "30M", seconds: 30 * 60 },
+  { id: "2h", label: "2H", seconds: 2 * 60 * 60 },
+  { id: "1d", label: "1D", seconds: 24 * 60 * 60 },
+  { id: "all", label: "ALL", seconds: 0 },
+];
 
 const ROULETTE_NUMBERS = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
@@ -570,6 +579,28 @@ function marketHistoryPoints(history) {
     .filter(point => Number.isFinite(point.price));
 }
 
+function marketRangeHistory(history, rangeId = marketDetailRange) {
+  const points = marketHistoryPoints(history)
+    .sort((left, right) => left.recordedAt - right.recordedAt);
+  const range = MARKET_DETAIL_RANGES.find(item => item.id === rangeId) || MARKET_DETAIL_RANGES.at(-1);
+  if (!range.seconds || points.length < 2) return points;
+
+  const cutoff = points.at(-1).recordedAt - range.seconds;
+  const firstVisible = points.findIndex(point => point.recordedAt >= cutoff);
+  if (firstVisible <= 0) return points;
+
+  return [
+    { price: points[firstVisible - 1].price, recordedAt: cutoff },
+    ...points.slice(firstVisible),
+  ];
+}
+
+function setMarketDetailRange(rangeId) {
+  if (!MARKET_DETAIL_RANGES.some(range => range.id === rangeId)) return;
+  marketDetailRange = rangeId;
+  renderMarketDetail();
+}
+
 function marketDetailChart(asset) {
   const history = marketHistoryPoints(asset.history);
   if (history.length === 1) history.unshift({ ...history[0] });
@@ -691,6 +722,15 @@ function renderMarketDetail() {
     body.innerHTML = `<div class="marketDetailEmpty">No data</div>`;
     return;
   }
+  const visibleHistory = marketRangeHistory(asset.history);
+  const visibleStart = visibleHistory[0]?.recordedAt;
+  const visibleEnd = visibleHistory.at(-1)?.recordedAt;
+  const visibleTrades = (asset.trades || []).filter(trade => (
+    (!Number.isFinite(visibleStart) || trade.createdAt >= visibleStart)
+    && (!Number.isFinite(visibleEnd) || trade.createdAt <= visibleEnd)
+  ));
+  const chartAsset = { ...asset, history: visibleHistory, trades: visibleTrades };
+  const activeRange = MARKET_DETAIL_RANGES.find(range => range.id === marketDetailRange) || MARKET_DETAIL_RANGES.at(-1);
   const direction = asset.change > 0 ? "up" : asset.change < 0 ? "down" : "flat";
   const changeLabel = `${asset.change > 0 ? "+" : ""}${asset.change} (${asset.changePct > 0 ? "+" : ""}${asset.changePct}%)`;
   const trades = (asset.trades || []).map(trade => `
@@ -718,11 +758,18 @@ function renderMarketDetail() {
       <span>Value <b>${asset.value}</b></span>
       <span>P/L <b>${asset.profit > 0 ? "+" : ""}${asset.profit}</b></span>
     </div>
-    <div class="marketDetailChartBox">${marketDetailChart(asset)}</div>
+    <div class="marketRangePicker" role="group" aria-label="Chart period">
+      ${MARKET_DETAIL_RANGES.map(range => `
+        <button type="button" class="${range.id === activeRange.id ? "active" : ""}"
+          aria-pressed="${range.id === activeRange.id}"
+          onclick="setMarketDetailRange('${range.id}')">${range.label}</button>
+      `).join("")}
+    </div>
+    <div class="marketDetailChartBox">${marketDetailChart(chartAsset)}</div>
     <div class="marketDetailRange">
-      <span>${formatDate(asset.history?.[0]?.recordedAt)}</span>
-      <span>All time</span>
-      <span>${formatDate(asset.history?.[asset.history.length - 1]?.recordedAt)}</span>
+      <span>${formatDate(visibleStart)}</span>
+      <span>${activeRange.id === "all" ? "All time" : `Last ${activeRange.label}`}</span>
+      <span>${formatDate(visibleEnd)}</span>
     </div>
     <div class="marketTradeList">
       <b>Trades</b>
