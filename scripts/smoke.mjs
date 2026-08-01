@@ -438,19 +438,38 @@ try {
     session: storeOwner,
   });
   let cityReady = await request("/api/state", { session: storeOwner });
-  const blackOffer = cityReady.city.blackMarket.offers.find(item => item.remaining > 0);
-  assert(blackOffer, "black market has no available offer");
-  await request("/api/city", {
+  const blackOffer = cityReady.city.blackMarket.offers.find(item => item.remaining > 0 && item.kind === "utility");
+  const valuableOffer = cityReady.city.blackMarket.offers.find(item => item.remaining > 0 && item.kind === "valuable");
+  assert(blackOffer && valuableOffer, "black market utility or valuable offer missing");
+  assert(valuableOffer.price < valuableOffer.legalPrice && valuableOffer.currentRisk > 0, "black market discount or police risk missing");
+  const utilityDeal = await request("/api/city", {
     method: "POST",
     body: { action: "blackMarketBuy", itemId: blackOffer.id },
     session: storeOwner,
   });
-  await request("/api/city", {
+  assert(typeof utilityDeal.outcome?.caught === "boolean", "black market police outcome missing");
+  if (!utilityDeal.outcome.caught) {
+    await request("/api/city", {
+      method: "POST",
+      body: { action: "useBlackMarketItem", itemId: blackOffer.id, storeId: firstStoreId },
+      session: storeOwner,
+    });
+  }
+  const valuableDeal = await request("/api/city", {
     method: "POST",
-    body: { action: "useBlackMarketItem", itemId: blackOffer.id, storeId: firstStoreId },
+    body: { action: "blackMarketBuy", itemId: valuableOffer.id },
     session: storeOwner,
   });
+  if (!valuableDeal.outcome.caught) {
+    const fenceDeal = await request("/api/city", {
+      method: "POST",
+      body: { action: "sellContraband", itemId: valuableOffer.id },
+      session: storeOwner,
+    });
+    assert(typeof fenceDeal.outcome?.caught === "boolean", "contraband sale police outcome missing");
+  }
   cityReady = await request("/api/state", { session: storeOwner });
+  assert(cityReady.city.blackMarket.heat >= 0, "police heat missing from black market state");
   const auction = cityReady.city.auctions[0];
   await request("/api/city", {
     method: "POST",

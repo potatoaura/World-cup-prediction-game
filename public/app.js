@@ -168,7 +168,19 @@ function selectCityView(view) {
 async function cityAction(action, payload = {}) {
   try {
     const result = await api("/api/city", { action, ...payload });
-    log(`City: ${action}`);
+    if (result.outcome?.caught) {
+      const details = result.outcome.confiscated
+        ? `${result.outcome.item} confiscated, fine ${result.outcome.fine}`
+        : `${result.outcome.item} lost, fine ${result.outcome.fine}`;
+      alert(`Police caught the deal. ${details}.`);
+      log(`Police: ${details}`);
+    } else if (result.outcome?.type === "deal") {
+      log(`Night market: bought ${result.outcome.item}, saved ${result.outcome.saved}`);
+    } else if (result.outcome?.type === "sale") {
+      log(`Night market: sold ${result.outcome.item} for ${result.outcome.received}`);
+    } else {
+      log(`City: ${action}`);
+    }
     if (result.city) STATE.city = result.city;
     if (result.store) STATE.store = result.store;
     await loadState();
@@ -286,15 +298,25 @@ function cityAuctionView(city) {
 function cityBlackMarketView(city) {
   const market = city.blackMarket;
   return `
-    <div class="cityViewHead night"><small>UNLICENSED TRADING</small><h3>Night Market</h3><p>Stock rotates in ${cityCountdown(market.endsAt)}. Quantities are limited per player.</p></div>
+    <div class="cityViewHead night"><small>UNLICENSED TRADING</small><h3>Underground Exchange</h3><p>Discounted valuables with no paperwork. Stock rotates in ${cityCountdown(market.endsAt)}.</p></div>
+    <div class="policeHeat ${market.heat >= 60 ? "danger" : market.heat >= 30 ? "warm" : ""}">
+      <div><small>POLICE ATTENTION</small><b>${market.heat}/100</b><span>${market.heat ? "Risk cools by 1 point each minute" : "No active attention"}</span></div>
+      <div class="policeHeatTrack"><i style="width:${market.heat}%"></i></div>
+    </div>
     <div class="blackMarketGrid">${market.offers.map(item => `
-      <article class="blackOffer"><small>${item.remaining} LEFT</small><b>${esc(item.name)}</b><p>${esc(item.description)}</p><button onclick="cityAction('blackMarketBuy',{itemId:'${item.id}'})" ${item.remaining < 1 ? "disabled" : ""}>Buy ${item.price}</button></article>
+      <article class="blackOffer ${item.kind}">
+        <div class="contrabandMark">${esc(item.code || "ITEM")}</div>
+        <small>${item.remaining} LEFT</small><b>${esc(item.name)}</b><p>${esc(item.description)}</p>
+        <div class="contrabandPrices"><span>Official <s>${item.legalPrice}</s></span><strong>${item.price}</strong><em>-${item.discount}%</em></div>
+        <div class="dealRisk"><span>Police risk</span><b>${Math.round(item.currentRisk * 100)}%</b></div>
+        <button onclick="cityAction('blackMarketBuy',{itemId:'${item.id}'})" ${item.remaining < 1 ? "disabled" : ""}>Buy discreetly</button>
+      </article>
     `).join("")}</div>
-    <div class="citySectionTitle"><b>Street inventory</b><span>Store items require a target location.</span></div>
+    <div class="citySectionTitle"><b>Safe inventory</b><span>Valuables can be fenced for profit, with another police check.</span></div>
     <div class="cityList">${market.inventory.length ? market.inventory.map(item => `
       <article class="inventoryRow"><div><b>${esc(item.name || item.id)}</b><span>Quantity ${item.quantity}</span></div>
-      ${["repair_kit", "camera_kit"].includes(item.id) ? `<select id="itemStore-${item.id}">${cityStoreOptions()}</select>` : ""}
-      <button onclick="cityAction('useBlackMarketItem',{itemId:'${item.id}',storeId:el('itemStore-${item.id}')?.value||''})">Use</button></article>
+      ${item.kind === "valuable" ? `<span class="fenceValue">Fence value <b>${item.resaleValue}</b></span>` : (["repair_kit", "camera_kit"].includes(item.id) ? `<select id="itemStore-${item.id}">${cityStoreOptions()}</select>` : "")}
+      <button onclick="cityAction('${item.kind === "valuable" ? "sellContraband" : "useBlackMarketItem"}',{itemId:'${item.id}',storeId:el('itemStore-${item.id}')?.value||''})">${item.kind === "valuable" ? "Sell to fence" : "Use"}</button></article>
     `).join("") : '<div class="cityEmpty">No items in street inventory.</div>'}</div>
   `;
 }
@@ -323,7 +345,7 @@ function renderCity() {
   }
   el("cityWallet").textContent = `Wallet ${STATE.user.wallet}`;
   el("cityTicker").innerHTML = `<b>LIVE</b> ${esc(city.news.title)} <span>${esc(city.news.description)}</span>`;
-  const titles = { hq: "Chain HQ", suppliers: "Supplier Row", vehicles: "Dealership", warehouse: "Warehouse", auction: "Auction House", blackmarket: "Night Market", news: "City News" };
+  const titles = { hq: "Chain HQ", suppliers: "Supplier Row", vehicles: "Dealership", warehouse: "Warehouse", auction: "Auction House", blackmarket: "Underground Exchange", news: "City News" };
   el("cityTitle").textContent = titles[activeCityView] || "City Map";
   const views = {
     hq: cityHqView,

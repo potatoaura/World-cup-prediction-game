@@ -3,14 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prediction Economy v3.2</title>
+<title>City Empire</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
-  <div>
-    <h1>Prediction Economy v3.2</h1>
-    <p>Persistent browser economy</p>
+  <div class="brandLockup">
+    <span class="brandMark">CE</span>
+    <div>
+      <h1>City Empire</h1>
+      <p>Business and city economy</p>
+    </div>
   </div>
   <div id="auth" class="auth">
     <input id="username" autocomplete="username" placeholder="username">
@@ -181,7 +184,7 @@
       </section>
     </div>
 
-    <section class="panel">
+    <section class="panel slotPanel">
       <h2>Slot</h2>
       <div class="inlineControls">
         <input id="slotAmount" type="number" value="10" min="1">
@@ -259,7 +262,7 @@
         <button class="cityBuilding cityDealer" onclick="selectCityView('vehicles')"><i>DV</i><b>Dealership</b><span>Delivery fleet</span></button>
         <button class="cityBuilding cityWarehouse" onclick="selectCityView('warehouse')"><i>WH</i><b>Warehouse</b><span>Bulk logistics</span></button>
         <button class="cityBuilding cityAuction" onclick="selectCityView('auction')"><i>AU</i><b>Auction House</b><span>Property bids</span></button>
-        <button class="cityBuilding cityBlackMarket" onclick="selectCityView('blackmarket')"><i>BM</i><b>Night Market</b><span>Rotating offers</span></button>
+        <button class="cityBuilding cityBlackMarket" onclick="selectCityView('blackmarket')"><i>BM</i><b>Underground Exchange</b><span>Valuables and risk</span></button>
         <button class="cityBuilding cityNews" onclick="selectCityView('news')"><i>CN</i><b>City News</b><span>Live demand</span></button>
       </nav>
       <aside class="cityPanel">

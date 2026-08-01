@@ -701,11 +701,17 @@ const CITY_WAREHOUSES = [
 ];
 
 const BLACK_MARKET_ITEMS = [
-  { id: "insurance_papers", name: "Insurance Papers", price: 8500, stock: 1, description: "Covers 70% of insured robbery losses for 30 minutes." },
-  { id: "rare_parts", name: "Rare Vehicle Parts", price: 4800, stock: 2, description: "Restores 30 vehicle condition." },
-  { id: "supplier_pass", name: "Supplier Pass", price: 6500, stock: 1, description: "Cuts supplier prices by 15% for 15 minutes." },
-  { id: "repair_kit", name: "Store Repair Kit", price: 4200, stock: 2, description: "Restores 20 condition at one store." },
-  { id: "camera_kit", name: "Camera Kit", price: 12000, stock: 1, description: "Adds one security level to a store." },
+  { id: "diamond", name: "Cut Diamond", code: "DIA", price: 48000, legalPrice: 80000, resaleValue: 62000, policeRisk: 0.24, stock: 1, kind: "valuable", description: "Certified stone with its serial marks removed." },
+  { id: "gold_bar", name: "Gold Bar", code: "AU", price: 28000, legalPrice: 45000, resaleValue: 35000, policeRisk: 0.18, stock: 1, kind: "valuable", description: "Investment gold offered far below the official exchange price." },
+  { id: "silver_case", name: "Silver Case", code: "AG", price: 10500, legalPrice: 18000, resaleValue: 13500, policeRisk: 0.12, stock: 2, kind: "valuable", description: "Sealed case of unregistered silver ingots." },
+  { id: "luxury_watch", name: "Luxury Watch", code: "WATCH", price: 34000, legalPrice: 60000, resaleValue: 46000, policeRisk: 0.22, stock: 1, kind: "valuable", description: "Rare mechanical watch without papers or receipt." },
+  { id: "ancient_coin", name: "Ancient Coin", code: "COIN", price: 56000, legalPrice: 100000, resaleValue: 76000, policeRisk: 0.30, stock: 1, kind: "valuable", description: "Museum-grade coin from an anonymous private collection." },
+  { id: "uncut_emerald", name: "Uncut Emerald", code: "EM", price: 39000, legalPrice: 70000, resaleValue: 52000, policeRisk: 0.26, stock: 1, kind: "valuable", description: "Large untreated gem sold through an unlicensed broker." },
+  { id: "insurance_papers", name: "Insurance Papers", code: "DOC", price: 8500, legalPrice: 13000, policeRisk: 0.08, stock: 1, kind: "utility", description: "Covers 70% of insured robbery losses for 30 minutes." },
+  { id: "rare_parts", name: "Rare Vehicle Parts", code: "PART", price: 4800, legalPrice: 7500, policeRisk: 0.06, stock: 2, kind: "utility", description: "Restores 30 vehicle condition." },
+  { id: "supplier_pass", name: "Supplier Pass", code: "PASS", price: 6500, legalPrice: 10000, policeRisk: 0.10, stock: 1, kind: "utility", description: "Cuts supplier prices by 15% for 15 minutes." },
+  { id: "repair_kit", name: "Store Repair Kit", code: "FIX", price: 4200, legalPrice: 6800, policeRisk: 0.05, stock: 2, kind: "utility", description: "Restores 20 condition at one store." },
+  { id: "camera_kit", name: "Camera Kit", code: "CAM", price: 12000, legalPrice: 19000, policeRisk: 0.11, stock: 1, kind: "utility", description: "Adds one security level to a store." },
 ];
 
 const CITY_NEWS = [
@@ -1125,6 +1131,31 @@ export async function onRequest(context) {
     return await DB.prepare("SELECT * FROM city_profiles WHERE user_id = ?").bind(userId).first();
   }
 
+  async function refreshPoliceHeat(profile) {
+    const current = nowSeconds();
+    const updatedAt = Number(profile.heat_updated_at || current);
+    const cooled = Math.floor(Math.max(0, current - updatedAt) / 60);
+    if (cooled < 1) return profile;
+    const heat = Math.max(0, Number(profile.police_heat || 0) - cooled);
+    await DB.prepare("UPDATE city_profiles SET police_heat = ?, heat_updated_at = ? WHERE user_id = ?")
+      .bind(heat, updatedAt + cooled * 60, profile.user_id).run();
+    return { ...profile, police_heat: heat, heat_updated_at: updatedAt + cooled * 60 };
+  }
+
+  function blackMarketOffers(cycle) {
+    const valuables = BLACK_MARKET_ITEMS.filter(item => item.kind === "valuable");
+    const utilities = BLACK_MARKET_ITEMS.filter(item => item.kind === "utility");
+    const rotate = (items, salt) => items
+      .map((item, index) => ({ item, sort: (cycle * salt + index * 29) % 101 }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(entry => entry.item);
+    return [...rotate(valuables, 17).slice(0, 3), ...rotate(utilities, 23).slice(0, 1)];
+  }
+
+  function blackMarketRisk(item, heat, multiplier = 1) {
+    return clamp(Number(item.policeRisk || 0.05) * multiplier + Number(heat || 0) / 500, 0.03, 0.75);
+  }
+
   async function refreshStockFreshness(table, ownerColumn, ownerId) {
     const rows = await DB.prepare(`
       SELECT product_id, quantity, freshness, freshness_updated_at
@@ -1195,7 +1226,7 @@ export async function onRequest(context) {
   }
 
   async function cityState(userId) {
-    const profile = await ensureCityProfile(userId);
+    const profile = await refreshPoliceHeat(await ensureCityProfile(userId));
     await ensureCityAuctions();
     await refreshStockFreshness("warehouse_stock", "user_id", userId);
     const [warehouseRows, inventoryRows, auctionRows, storeRows] = await Promise.all([
@@ -1207,10 +1238,7 @@ export async function onRequest(context) {
     const warehouse = warehouseInfo(profile);
     const warehouseUsed = warehouseRows.results.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
     const cycle = Math.floor(nowSeconds() / 600);
-    const offers = BLACK_MARKET_ITEMS
-      .map((item, index) => ({ item, sort: (cycle * 17 + index * 29) % 101 }))
-      .sort((a, b) => a.sort - b.sort)
-      .slice(0, 3);
+    const offers = blackMarketOffers(cycle);
     const purchaseRows = await DB.prepare("SELECT item_id, quantity FROM black_market_purchases WHERE user_id = ? AND market_cycle = ?")
       .bind(userId, cycle).all();
     const purchased = Object.fromEntries(purchaseRows.results.map(row => [row.item_id, Number(row.quantity || 0)]));
@@ -1270,7 +1298,14 @@ export async function onRequest(context) {
       blackMarket: {
         cycle,
         endsAt: (cycle + 1) * 600,
-        offers: offers.map(({ item }) => ({ ...item, remaining: Math.max(0, item.stock - Number(purchased[item.id] || 0)) })),
+        heat: Number(profile.police_heat || 0),
+        heatUpdatedAt: Number(profile.heat_updated_at || 0),
+        offers: offers.map(item => ({
+          ...item,
+          discount: Math.round((1 - item.price / item.legalPrice) * 100),
+          currentRisk: blackMarketRisk(item, profile.police_heat),
+          remaining: Math.max(0, item.stock - Number(purchased[item.id] || 0)),
+        })),
         inventory: inventoryRows.results.map(row => ({
           ...BLACK_MARKET_ITEMS.find(item => item.id === row.item_id),
           id: row.item_id,
@@ -2512,8 +2547,9 @@ export async function onRequest(context) {
   if (path === "/city" && request.method === "POST") {
     const data = await body();
     const action = String(data.action || "");
-    const profile = await ensureCityProfile(user.id);
+    const profile = await refreshPoliceHeat(await ensureCityProfile(user.id));
     const freshUser = await userById(user.id);
+    let cityOutcome = null;
     const ownedStore = async () => {
       if (!data.storeId) return null;
       return await DB.prepare("SELECT * FROM player_stores WHERE id = ? AND user_id = ?")
@@ -2660,29 +2696,68 @@ export async function onRequest(context) {
     } else if (action === "blackMarketBuy") {
       const item = BLACK_MARKET_ITEMS.find(entry => entry.id === String(data.itemId || ""));
       const cycle = Math.floor(nowSeconds() / 600);
-      const offeredIds = BLACK_MARKET_ITEMS.map((entry, index) => ({ id: entry.id, sort: (cycle * 17 + index * 29) % 101 }))
-        .sort((a, b) => a.sort - b.sort).slice(0, 3).map(entry => entry.id);
+      const offeredIds = blackMarketOffers(cycle).map(entry => entry.id);
       if (!item || !offeredIds.includes(item.id)) return json({ error: "Item is not on sale this cycle" }, 404);
       const purchased = await DB.prepare("SELECT quantity FROM black_market_purchases WHERE user_id = ? AND item_id = ? AND market_cycle = ?")
         .bind(user.id, item.id, cycle).first();
       if (Number(purchased?.quantity || 0) >= item.stock) return json({ error: "Offer sold out" }, 400);
       if (item.price > Number(freshUser.wallet || 0)) return json({ error: `Need ${item.price} wallet` }, 400);
-      await DB.batch([
-        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(item.price, user.id),
+      const risk = blackMarketRisk(item, profile.police_heat);
+      const caught = Math.random() < risk;
+      const fine = caught ? Math.ceil(Number(item.legalPrice || item.price) * 0.12 + risk * 1000) : 0;
+      const statements = [
         DB.prepare(`
           INSERT INTO black_market_purchases (user_id, item_id, market_cycle, quantity) VALUES (?, ?, ?, 1)
           ON CONFLICT(user_id, item_id, market_cycle) DO UPDATE SET quantity = quantity + 1
         `).bind(user.id, item.id, cycle),
-        DB.prepare(`
+      ];
+      if (caught) {
+        statements.push(
+          DB.prepare("UPDATE users SET wallet = MAX(0, wallet - ?) WHERE id = ?").bind(item.price + fine, user.id),
+          DB.prepare("UPDATE city_profiles SET police_heat = MIN(100, police_heat + 25), heat_updated_at = ? WHERE user_id = ?")
+            .bind(nowSeconds(), user.id),
+        );
+        cityOutcome = { type: "police", caught: true, item: item.name, fine, lost: item.price, risk };
+      } else {
+        statements.push(
+          DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(item.price, user.id),
+          DB.prepare("UPDATE city_profiles SET police_heat = MIN(100, police_heat + 4), heat_updated_at = ? WHERE user_id = ?")
+            .bind(nowSeconds(), user.id),
+          DB.prepare(`
           INSERT INTO city_inventory (user_id, item_id, quantity) VALUES (?, ?, 1)
           ON CONFLICT(user_id, item_id) DO UPDATE SET quantity = quantity + 1
-        `).bind(user.id, item.id),
-      ]);
+          `).bind(user.id, item.id),
+        );
+        cityOutcome = { type: "deal", caught: false, item: item.name, paid: item.price, saved: item.legalPrice - item.price, risk };
+      }
+      await DB.batch(statements);
+    } else if (action === "sellContraband") {
+      const item = BLACK_MARKET_ITEMS.find(entry => entry.id === String(data.itemId || "") && entry.kind === "valuable");
+      const inventory = item && await DB.prepare("SELECT quantity FROM city_inventory WHERE user_id = ? AND item_id = ?")
+        .bind(user.id, item.id).first();
+      if (!item || Number(inventory?.quantity || 0) < 1) return json({ error: "Valuable not in inventory" }, 404);
+      const risk = blackMarketRisk(item, profile.police_heat, 0.65);
+      const caught = Math.random() < risk;
+      const fine = caught ? Math.ceil(item.legalPrice * 0.16) : 0;
+      const statements = [
+        DB.prepare("UPDATE city_inventory SET quantity = quantity - 1 WHERE user_id = ? AND item_id = ?").bind(user.id, item.id),
+        DB.prepare("UPDATE city_profiles SET police_heat = MIN(100, police_heat + ?), heat_updated_at = ? WHERE user_id = ?")
+          .bind(caught ? 30 : 7, nowSeconds(), user.id),
+      ];
+      if (caught) {
+        statements.push(DB.prepare("UPDATE users SET wallet = MAX(0, wallet - ?) WHERE id = ?").bind(fine, user.id));
+        cityOutcome = { type: "police", caught: true, item: item.name, fine, confiscated: true, risk };
+      } else {
+        statements.push(DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(item.resaleValue, user.id));
+        cityOutcome = { type: "sale", caught: false, item: item.name, received: item.resaleValue, risk };
+      }
+      await DB.batch(statements);
     } else if (action === "useBlackMarketItem") {
       const item = BLACK_MARKET_ITEMS.find(entry => entry.id === String(data.itemId || ""));
       const inventory = item && await DB.prepare("SELECT quantity FROM city_inventory WHERE user_id = ? AND item_id = ?")
         .bind(user.id, item.id).first();
       if (!item || Number(inventory?.quantity || 0) < 1) return json({ error: "Item not in inventory" }, 404);
+      if (item.kind === "valuable") return json({ error: "Valuables can be sold, not used" }, 400);
       const statements = [DB.prepare("UPDATE city_inventory SET quantity = quantity - 1 WHERE user_id = ? AND item_id = ?")
         .bind(user.id, item.id)];
       if (item.id === "insurance_papers") {
@@ -2729,7 +2804,7 @@ export async function onRequest(context) {
       return json({ error: "Bad city action" }, 400);
     }
 
-    return json({ ok: true, action, city: await cityState(user.id), store: await storeState(user.id) });
+    return json({ ok: true, action, outcome: cityOutcome, city: await cityState(user.id), store: await storeState(user.id) });
   }
 
   if (path.startsWith("/market/") && request.method === "GET") {
@@ -3181,6 +3256,8 @@ async function ensureRuntimeTables(DB) {
         warehouse_level INTEGER NOT NULL DEFAULT 0,
         insurance_until INTEGER NOT NULL DEFAULT 0,
         supplier_pass_until INTEGER NOT NULL DEFAULT 0,
+        police_heat INTEGER NOT NULL DEFAULT 0,
+        heat_updated_at INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       )
     `),
@@ -3293,6 +3370,8 @@ async function ensureRuntimeTables(DB) {
   await ensureTableColumn(DB, "player_stores", "campaign_until", "INTEGER NOT NULL DEFAULT 0");
   await ensureTableColumn(DB, "player_store_stock", "freshness", "INTEGER NOT NULL DEFAULT 100");
   await ensureTableColumn(DB, "player_store_stock", "freshness_updated_at", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "city_profiles", "police_heat", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn(DB, "city_profiles", "heat_updated_at", "INTEGER NOT NULL DEFAULT 0");
   await DB.batch([
     DB.prepare(`
       INSERT OR IGNORE INTO player_stores (
@@ -3325,6 +3404,8 @@ async function ensureRuntimeTables(DB) {
   await DB.prepare("UPDATE player_store_stock SET freshness_updated_at = ? WHERE freshness_updated_at = 0")
     .bind(now).run();
   await DB.prepare("UPDATE warehouse_stock SET freshness_updated_at = ? WHERE freshness_updated_at = 0")
+    .bind(now).run();
+  await DB.prepare("UPDATE city_profiles SET heat_updated_at = ? WHERE heat_updated_at = 0")
     .bind(now).run();
   runtimeTablesReady = true;
 }

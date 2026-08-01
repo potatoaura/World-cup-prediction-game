@@ -213,6 +213,8 @@ CREATE TABLE IF NOT EXISTS city_profiles (
   warehouse_level INTEGER NOT NULL DEFAULT 0,
   insurance_until INTEGER NOT NULL DEFAULT 0,
   supplier_pass_until INTEGER NOT NULL DEFAULT 0,
+  police_heat INTEGER NOT NULL DEFAULT 0,
+  heat_updated_at INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 
