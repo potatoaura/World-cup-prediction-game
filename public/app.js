@@ -1,7 +1,8 @@
-let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null, city: null };
+let STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null, city: null, businesses: null, casino: null, lottery: null };
 let wheelRotation = 0;
 let ballRotation = 0;
 let rouletteBusy = false;
+let fortuneRotation = 0;
 let serverClockOffsetSeconds = 0;
 let workRefreshQueued = false;
 let lastWorkPollAt = 0;
@@ -81,7 +82,7 @@ async function loadState() {
     lastStorePollAt = Date.now();
     hideError();
   } catch (error) {
-    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null, city: null };
+    STATE = { user: null, admin: false, leaderboard: [], adminUsers: [], properties: null, store: null, city: null, businesses: null, casino: null, lottery: null };
     showError(`API error: ${error.message}`);
   }
   render();
@@ -105,8 +106,10 @@ function render() {
   el("lifePanel").classList.toggle("hidden", !user);
   el("propertyPanel").classList.toggle("hidden", !user);
   el("storePanel").classList.toggle("hidden", !user);
+  el("businessPanel").classList.toggle("hidden", !user);
   el("workPanel").classList.toggle("hidden", !user);
   el("marketPanel").classList.toggle("hidden", !user);
+  el("casinoPanel").classList.toggle("hidden", !user);
   el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
 
   if (user) {
@@ -127,10 +130,15 @@ function render() {
   renderLife();
   renderProperties();
   renderStore();
+  renderBusinesses();
   renderWorkQuest();
   renderMarket();
   renderMarketDetail();
   renderCity();
+  renderMines();
+  renderBlackjack();
+  renderLottery();
+  renderCasinoRecent();
   renderClock();
   drawWheel();
 }
@@ -707,6 +715,62 @@ function renderProperties() {
       </div>
     </div>
   `).join("") : `<div class="propertyEmpty">No owned apartments</div>`;
+}
+
+function renderBusinesses() {
+  const panel = el("businessPanel");
+  if (!panel || !STATE.user) return;
+  const businesses = STATE.businesses || { catalog: [], owned: [], totalNetPerDay: 0, totalAccrued: 0 };
+  el("businessOwned").textContent = businesses.owned?.length || 0;
+  el("businessIncome").textContent = businesses.totalNetPerDay || 0;
+  el("businessAccrued").textContent = businesses.totalAccrued || 0;
+  el("businessCatalog").innerHTML = (businesses.catalog || []).map(item => {
+    const locked = Number(STATE.user.rating || 0) < Number(item.rating || 0);
+    if (!item.owned) return `
+      <article class="businessCard ${locked ? "locked" : ""}">
+        <div class="businessBadge">${esc(item.badge)}</div>
+        <div class="businessCardHead"><div><span>AVAILABLE BUSINESS</span><h3>${esc(item.name)}</h3></div><strong>${item.price}</strong></div>
+        <p>${esc(item.description)}</p>
+        <div class="businessMetrics">
+          <span>Gross/day<b>${item.income}</b></span>
+          <span>Upkeep/day<b>-${item.upkeep}</b></span>
+          <span>Rating<b>${item.rating}</b></span>
+        </div>
+        <button onclick="businessAction('buy','${esc(item.id)}')" ${locked || STATE.user.wallet < item.price ? "disabled" : ""}>
+          ${locked ? `Rating ${item.rating} required` : `Buy for ${item.price}`}
+        </button>
+      </article>
+    `;
+    return `
+      <article class="businessCard owned">
+        <div class="businessBadge">${esc(item.badge)}</div>
+        <div class="businessCardHead"><div><span>OWNED · LEVEL ${item.level}</span><h3>${esc(item.businessName || item.name)}</h3></div><strong>+${item.netIncome}/day</strong></div>
+        <p>${esc(item.description)}</p>
+        <div class="businessMetrics">
+          <span>Gross/day<b>${item.income}</b></span>
+          <span>Upkeep/day<b>-${item.upkeep}</b></span>
+          <span>Ready<b>${item.accrued}</b></span>
+        </div>
+        <div class="businessActions">
+          <button onclick="businessAction('collect','${esc(item.id)}')" ${item.accrued < 1 ? "disabled" : ""}>Collect ${item.accrued || "later"}</button>
+          <button class="secondary" onclick="businessAction('upgrade','${esc(item.id)}')" ${!item.upgradeCost || STATE.user.wallet + item.accrued < item.upgradeCost ? "disabled" : ""}>
+            ${item.upgradeCost ? `Upgrade ${item.upgradeCost}` : "Max level"}
+          </button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+async function businessAction(action, businessType) {
+  try {
+    const result = await api("/api/business", { action, businessType });
+    if (result.businesses) STATE.businesses = result.businesses;
+    log(`Business: ${action} ${businessType}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 function storePremisesCards(listings) {
@@ -1495,6 +1559,233 @@ async function submitWorkAnswer(answer) {
   }
 }
 
+async function dice() {
+  try {
+    const amount = Number(el("diceAmount").value);
+    const number = Number(el("diceNumber").value);
+    el("diceVisual").classList.add("rolling");
+    el("diceMsg").textContent = "Rolling";
+    const result = await api("/api/casino/dice", { amount, number });
+    setTimeout(async () => {
+      el("diceVisual").textContent = result.result;
+      el("diceVisual").classList.remove("rolling");
+      el("diceMsg").textContent = result.win ? `Exact roll · +${result.win}` : `Rolled ${result.result} · -${amount}`;
+      await loadState();
+    }, 650);
+  } catch (error) {
+    el("diceVisual").classList.remove("rolling");
+    alert(error.message);
+  }
+}
+
+async function crash() {
+  try {
+    const amount = Number(el("crashAmount").value);
+    const target = Number(el("crashTarget").value);
+    const result = await api("/api/casino/crash", { amount, target });
+    const rocket = el("crashRocket");
+    const display = el("crashMultiplier");
+    rocket.classList.remove("launched");
+    void rocket.offsetWidth;
+    rocket.style.setProperty("--crash-progress", `${Math.min(100, result.crashPoint / 10 * 100)}%`);
+    rocket.classList.add("launched");
+    display.textContent = `${result.crashPoint.toFixed(2)}x`;
+    display.classList.toggle("win", result.won);
+    el("crashMsg").textContent = result.won
+      ? `Cashed out at ${result.target.toFixed(2)}x · +${result.win}`
+      : `Crashed before ${result.target.toFixed(2)}x · -${amount}`;
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function fortuneWheel() {
+  const button = el("fortuneButton");
+  try {
+    button.disabled = true;
+    const amount = Number(el("fortuneAmount").value);
+    const result = await api("/api/casino/wheel", { amount });
+    const segmentSize = 360 / 9;
+    fortuneRotation += 1080 + (9 - result.segmentIndex) * segmentSize;
+    el("fortuneWheel").style.transform = `rotate(${fortuneRotation}deg)`;
+    el("fortuneMsg").textContent = "Spinning";
+    setTimeout(async () => {
+      el("fortuneMsg").textContent = result.win ? `${result.label} · +${result.win}` : `${result.label} · -${amount}`;
+      button.disabled = false;
+      await loadState();
+    }, 1900);
+  } catch (error) {
+    button.disabled = false;
+    alert(error.message);
+  }
+}
+
+function renderMines(gameOverride = undefined) {
+  const board = el("minesBoard");
+  if (!board) return;
+  const game = gameOverride === undefined ? STATE.casino?.mines : gameOverride;
+  const active = game?.status === "active";
+  const revealed = new Set(game?.revealed || []);
+  board.innerHTML = Array.from({ length: game?.gridSize || 25 }, (_, index) => `
+    <button class="mineTile ${revealed.has(index) ? "revealed" : ""}" onclick="minesReveal(${index})" ${!active || revealed.has(index) ? "disabled" : ""}>
+      ${revealed.has(index) ? "◆" : ""}
+    </button>
+  `).join("");
+  el("minesStartButton").disabled = active;
+  el("minesCashoutButton").disabled = !active || !revealed.size;
+  el("minesCount").disabled = active;
+  el("minesAmount").disabled = active;
+  el("minesStatus").textContent = game
+    ? `${game.status.replaceAll("_", " ")} · ${game.mines} mines · cash out ${game.cashout}`
+    : "No active game";
+  el("minesMultiplier").textContent = `${Number(game?.multiplier || 1).toFixed(2)}x`;
+}
+
+async function minesStart() {
+  try {
+    const result = await api("/api/casino/mines", {
+      action: "start",
+      amount: Number(el("minesAmount").value),
+      mines: Number(el("minesCount").value),
+    });
+    STATE.casino = { ...(STATE.casino || {}), mines: result.game };
+    renderMines();
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function minesReveal(position) {
+  try {
+    const result = await api("/api/casino/mines", { action: "reveal", position });
+    STATE.casino = { ...(STATE.casino || {}), mines: result.game };
+    renderMines();
+    if (result.hitMine) {
+      const tile = el("minesBoard")?.children[result.mineIndex];
+      if (tile) {
+        tile.textContent = "✹";
+        tile.classList.add("mineHit");
+      }
+      el("minesStatus").textContent = "Mine hit · bet lost";
+      setTimeout(() => loadState(), 1200);
+    } else {
+      await loadState();
+    }
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function minesCashout() {
+  try {
+    const result = await api("/api/casino/mines", { action: "cashout" });
+    STATE.casino = { ...(STATE.casino || {}), mines: result.game };
+    renderMines();
+    el("minesStatus").textContent = `Cashed out ${result.game.cashout}`;
+    setTimeout(() => loadState(), 900);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function playingCard(card) {
+  if (card === "??") return `<i class="playingCard hiddenCard">?</i>`;
+  const rank = String(card).slice(0, -1);
+  const suitCode = String(card).slice(-1);
+  const suits = { S: "♠", H: "♥", D: "♦", C: "♣" };
+  const red = suitCode === "H" || suitCode === "D";
+  return `<i class="playingCard ${red ? "red" : ""}"><b>${esc(rank)}</b><span>${suits[suitCode] || ""}</span></i>`;
+}
+
+function renderBlackjack(gameOverride = undefined) {
+  if (!el("blackjackMsg")) return;
+  const game = gameOverride === undefined ? STATE.casino?.blackjack : gameOverride;
+  const active = game?.status === "active";
+  el("blackjackStartButton").disabled = active;
+  el("blackjackAmount").disabled = active;
+  el("blackjackHitButton").disabled = !active;
+  el("blackjackStandButton").disabled = !active;
+  el("playerCards").innerHTML = (game?.playerCards || []).map(playingCard).join("");
+  el("dealerCards").innerHTML = (game?.dealerCards || []).map(playingCard).join("");
+  el("playerValue").textContent = game?.playerValue || 0;
+  el("dealerValue").textContent = game?.dealerValue || 0;
+  el("blackjackMsg").textContent = game
+    ? `${game.status.replaceAll("_", " ")}${game.payout ? ` · payout ${game.payout}` : ""}`
+    : "Place a bet to deal";
+}
+
+async function blackjackAction(action) {
+  try {
+    const result = await api("/api/casino/blackjack", {
+      action,
+      amount: action === "start" ? Number(el("blackjackAmount").value) : undefined,
+    });
+    STATE.casino = { ...(STATE.casino || {}), blackjack: result.game };
+    renderBlackjack();
+    if (result.game.status === "active") await loadState();
+    else setTimeout(() => loadState(), 1400);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function renderLotteryCountdown() {
+  const target = Number(STATE.lottery?.nextDrawAt || 0);
+  if (!el("lotteryCountdown")) return;
+  if (!target) {
+    el("lotteryCountdown").textContent = "--:--";
+    return;
+  }
+  const current = Math.floor(Date.now() / 1000) + serverClockOffsetSeconds;
+  const remaining = Math.max(0, target - current);
+  el("lotteryCountdown").textContent = `${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, "0")}`;
+}
+
+function renderLottery() {
+  if (!el("lotteryTickets")) return;
+  const lottery = STATE.lottery || { tickets: [], ticketPrice: 25 };
+  el("lotteryPrice").textContent = lottery.ticketPrice || 25;
+  renderLotteryCountdown();
+  el("lotteryTickets").innerHTML = (lottery.tickets || []).length
+    ? lottery.tickets.map(ticket => `
+      <article class="lotteryTicket ${esc(ticket.status)}">
+        <div class="lotteryBalls">${ticket.numbers.map(number => `<i>${number}</i>`).join("")}</div>
+        <div><b>${esc(ticket.status)}</b><span>Draw ${formatDate(ticket.drawAt)}</span></div>
+        <strong>${ticket.status === "pending" ? "WAITING" : ticket.prize ? `+${ticket.prize}` : `${ticket.matches} matches`}</strong>
+        ${ticket.winningNumbers ? `<small>Drawn: ${ticket.winningNumbers.join(", ")}</small>` : ""}
+      </article>
+    `).join("")
+    : `<div class="casinoEmpty">No lottery tickets yet. Buy a selected ticket or use Quick Pick.</div>`;
+}
+
+async function buyLotteryTicket(quickPick) {
+  try {
+    let numbers;
+    if (!quickPick) {
+      numbers = el("lotteryNumbers").value.split(/[,\s]+/).filter(Boolean).map(Number);
+    }
+    const result = await api("/api/lottery", { action: "buy", numbers });
+    el("lotteryNumbers").value = result.ticket.numbers.join(", ");
+    STATE.lottery = result.lottery;
+    renderLottery();
+    log(`Lottery ticket bought: ${result.ticket.numbers.join("-")}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function renderCasinoRecent() {
+  const box = el("casinoRecent");
+  if (!box) return;
+  const plays = STATE.casino?.recent || [];
+  box.innerHTML = plays.length ? plays.map(play => `
+    <span><b>${esc(play.game)}</b><em>${esc(play.result)}</em><strong>${play.payout ? `+${play.payout}` : `-${play.bet}`}</strong></span>
+  `).join("") : `<div class="casinoEmpty">No casino plays yet.</div>`;
+}
+
 async function slot() {
   try {
     const amount = Number(el("slotAmount").value);
@@ -1669,6 +1960,7 @@ function drawWheel() {
 loadState();
 setInterval(() => {
   renderClock();
+  renderLotteryCountdown();
   renderWorkQuest();
   maybePollWorkQuest();
   maybePollStore();

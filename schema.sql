@@ -289,6 +289,70 @@ CREATE TABLE IF NOT EXISTS market_history (
   recorded_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS player_businesses (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  business_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  level INTEGER NOT NULL DEFAULT 1,
+  last_collect INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, business_type)
+);
+
+CREATE TABLE IF NOT EXISTS casino_plays (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  game TEXT NOT NULL,
+  bet INTEGER NOT NULL,
+  payout INTEGER NOT NULL DEFAULT 0,
+  result TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS casino_mines_games (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  bet INTEGER NOT NULL,
+  mines INTEGER NOT NULL,
+  mine_positions TEXT NOT NULL,
+  revealed_positions TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'active',
+  payout INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS casino_blackjack_games (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  bet INTEGER NOT NULL,
+  deck TEXT NOT NULL,
+  player_cards TEXT NOT NULL,
+  dealer_cards TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  payout INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lottery_draws (
+  id TEXT PRIMARY KEY,
+  draw_at INTEGER NOT NULL,
+  winning_numbers TEXT,
+  status TEXT NOT NULL DEFAULT 'open'
+);
+
+CREATE TABLE IF NOT EXISTS lottery_tickets (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  draw_id TEXT NOT NULL,
+  numbers TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  matches INTEGER NOT NULL DEFAULT 0,
+  prize INTEGER NOT NULL DEFAULT 0,
+  purchased_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_match_id ON predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_bets_match_status ON bets(match_id, status);
@@ -313,3 +377,10 @@ CREATE INDEX IF NOT EXISTS idx_property_auctions_ends ON property_auctions(statu
 CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol);
 CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_player_businesses_user ON player_businesses(user_id);
+CREATE INDEX IF NOT EXISTS idx_casino_plays_user_created ON casino_plays(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_casino_mines_user_status ON casino_mines_games(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_casino_blackjack_user_status ON casino_blackjack_games(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_lottery_draws_status_time ON lottery_draws(status, draw_at);
+CREATE INDEX IF NOT EXISTS idx_lottery_tickets_user_time ON lottery_tickets(user_id, purchased_at);
+CREATE INDEX IF NOT EXISTS idx_lottery_tickets_draw ON lottery_tickets(draw_id, status);

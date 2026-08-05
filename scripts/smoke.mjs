@@ -170,11 +170,13 @@ try {
   const borrower = makeSession();
   const propertyBuyer = makeSession();
   const storeOwner = makeSession();
+  const casinoOwner = makeSession();
   const playerName = `player_${stamp}`;
   const adminName = `admin_${stamp}`;
   const borrowerName = `borrower_${stamp}`;
   const propertyBuyerName = `property_${stamp}`;
   const storeOwnerName = `store_${stamp}`;
+  const casinoOwnerName = `casino_${stamp}`;
 
   const registeredPlayer = await request("/api/register", {
     method: "POST",
@@ -235,6 +237,132 @@ try {
   assert(finalState.user.life?.items?.length >= 6, "life shop catalog missing");
   assert(finalState.user.life?.housingListings?.length >= 5, "housing listings missing");
   assert(finalState.properties?.listings?.some(item => item.price >= 100000), "property listings missing 100k apartments");
+
+  const registeredCasinoOwner = await request("/api/register", {
+    method: "POST",
+    body: { username: casinoOwnerName, password: "pass1234", adminCode: "" },
+    session: casinoOwner,
+  });
+  await request("/api/admin/userAction", {
+    method: "POST",
+    body: { userId: registeredCasinoOwner.user.id, action: "addWallet", amount: 4000000, reason: "smoke casino and businesses grant" },
+    session: admin,
+  });
+  await request("/api/admin/userAction", {
+    method: "POST",
+    body: { userId: registeredCasinoOwner.user.id, action: "setRating", amount: 800, reason: "smoke business rating" },
+    session: admin,
+  });
+  const casinoStart = await request("/api/state", { session: casinoOwner });
+  assert(casinoStart.businesses?.catalog?.length === 8, "business catalog should contain eight businesses");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "coffee_shop"), "coffee shop business missing");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "pizza_restaurant"), "pizza restaurant business missing");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "hotel"), "hotel business missing");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "gas_station"), "gas station business missing");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "supermarket"), "supermarket business missing");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "casino"), "casino business missing");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "football_club"), "football club business missing");
+  assert(casinoStart.businesses.catalog.some(item => item.id === "bank"), "bank business missing");
+  await request("/api/business", {
+    method: "POST",
+    body: { action: "buy", businessType: "coffee_shop" },
+    session: casinoOwner,
+  });
+  await request("/api/business", {
+    method: "POST",
+    body: { action: "upgrade", businessType: "coffee_shop" },
+    session: casinoOwner,
+  });
+  await request("/api/business", {
+    method: "POST",
+    body: { action: "buy", businessType: "bank" },
+    session: casinoOwner,
+  });
+  const businessReady = await request("/api/state", { session: casinoOwner });
+  assert(businessReady.businesses.owned.length === 2, "business purchases did not persist");
+  assert(businessReady.businesses.owned.find(item => item.id === "coffee_shop")?.level === 2, "business upgrade did not persist");
+
+  const dicePlay = await request("/api/casino/dice", {
+    method: "POST",
+    body: { amount: 10, number: 4 },
+    session: casinoOwner,
+  });
+  assert(dicePlay.result >= 1 && dicePlay.result <= 6, "dice result outside 1-6");
+  assert(dicePlay.winChance === 0.1, "dice win chance is not 10%");
+  const crashPlay = await request("/api/casino/crash", {
+    method: "POST",
+    body: { amount: 10, target: 2 },
+    session: casinoOwner,
+  });
+  assert(crashPlay.crashPoint >= 1 && typeof crashPlay.won === "boolean", "crash result missing");
+  assert(crashPlay.houseFactor === 0.82 && crashPlay.winChance === 0.41, "crash odds are not reduced");
+  const fortunePlay = await request("/api/casino/wheel", {
+    method: "POST",
+    body: { amount: 10 },
+    session: casinoOwner,
+  });
+  assert(fortunePlay.segmentIndex >= 0 && fortunePlay.segmentIndex < 9, "fortune wheel segment invalid");
+  assert(fortunePlay.winChance === 0.18, "fortune wheel win chance is not 18%");
+  const slotPlay = await request("/api/casino/slot", {
+    method: "POST",
+    body: { amount: 1 },
+    session: casinoOwner,
+  });
+  assert(slotPlay.reels?.length === 3, "slot reels missing");
+  assert(slotPlay.odds?.jackpot === 0.0005 && slotPlay.odds?.anyWin === 0.01, "slot odds are not reduced");
+
+  let minesResult;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await request("/api/casino/mines", {
+      method: "POST",
+      body: { action: "start", amount: 10, mines: 5 },
+      session: casinoOwner,
+    });
+    minesResult = await request("/api/casino/mines", {
+      method: "POST",
+      body: { action: "reveal", position: 0 },
+      session: casinoOwner,
+    });
+    if (!minesResult.hitMine) break;
+  }
+  assert(minesResult && !minesResult.hitMine && minesResult.game.status === "active", "could not reach a safe Mines tile");
+  const minesCashout = await request("/api/casino/mines", {
+    method: "POST",
+    body: { action: "cashout" },
+    session: casinoOwner,
+  });
+  assert(minesCashout.game.status === "cashed_out" && minesCashout.game.payout > 0, "Mines cashout failed");
+
+  let blackjackStart;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    blackjackStart = await request("/api/casino/blackjack", {
+      method: "POST",
+      body: { action: "start", amount: 20 },
+      session: casinoOwner,
+    });
+    if (blackjackStart.game.status === "active") break;
+  }
+  assert(blackjackStart?.game?.playerCards?.length === 2, "Blackjack deal missing player cards");
+  if (blackjackStart.game.status === "active") {
+    const blackjackEnd = await request("/api/casino/blackjack", {
+      method: "POST",
+      body: { action: "stand" },
+      session: casinoOwner,
+    });
+    assert(blackjackEnd.game.status !== "active", "Blackjack stand did not settle hand");
+  }
+
+  const lotteryBuy = await request("/api/lottery", {
+    method: "POST",
+    body: { action: "buy" },
+    session: casinoOwner,
+  });
+  assert(lotteryBuy.ticket.numbers.length === 6, "lottery Quick Pick did not create six numbers");
+  assert(new Set(lotteryBuy.ticket.numbers).size === 6, "lottery ticket numbers are not unique");
+  assert(lotteryBuy.ticket.numbers.every(number => number >= 1 && number <= 49), "lottery number outside 1-49");
+  const casinoReady = await request("/api/state", { session: casinoOwner });
+  assert(casinoReady.lottery.tickets.some(ticket => ticket.id === lotteryBuy.ticket.id), "lottery ticket was not persisted");
+  assert(casinoReady.casino.recent.some(play => play.game === "dice"), "casino history missing dice play");
 
   const registeredPropertyBuyer = await request("/api/register", {
     method: "POST",
@@ -509,6 +637,7 @@ try {
   });
   assert(Number.isInteger(roulette.result) && roulette.result >= 0 && roulette.result <= 36, "bad roulette result");
   assert(Number.isInteger(roulette.slotIndex) && roulette.slotIndex >= 0 && roulette.slotIndex < 37, "bad roulette slot");
+  assert(roulette.winChance === 0.015, "roulette exact-number chance is not 1.5%");
 
   const marketBefore = await request("/api/state", { session: player });
   assert(marketBefore.market?.assets?.length >= 12, "market assets missing");
@@ -681,6 +810,12 @@ try {
     cityBrand: cityAfterBid.city.profile.brandName,
     cityWarehouseStock: cityAfterBid.city.warehouse.stock.find(item => item.productId === "bread")?.quantity,
     auctionLeading: cityAfterBid.city.auctions.find(item => item.id === auction.id)?.leading,
+    businessesOwned: businessReady.businesses.owned.length,
+    diceResult: dicePlay.result,
+    crashPoint: crashPlay.crashPoint,
+    fortuneSegment: fortunePlay.label,
+    minesPayout: minesCashout.game.payout,
+    lotteryNumbers: lotteryBuy.ticket.numbers,
   }, null, 2));
 } catch (error) {
   console.error(serverOutput.trim());
