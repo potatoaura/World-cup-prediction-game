@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#07110f">
+<meta name="description" content="Build businesses, trade the market and grow a living city empire.">
 <title>City Empire</title>
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/game-theme.css">
 </head>
 <body>
 <header class="top">
@@ -12,7 +15,7 @@
     <span class="brandMark">CE</span>
     <div>
       <h1>City Empire</h1>
-      <p>Business and city economy</p>
+      <p>The city is yours to command</p>
     </div>
   </div>
   <div id="auth" class="auth">
@@ -30,6 +33,34 @@
 </header>
 
 <div id="errorBox" class="error hidden"></div>
+
+<section class="gameHero" aria-labelledby="heroTitle">
+  <div class="heroShade"></div>
+  <div class="heroContent">
+    <span class="heroEyebrow"><i></i> LIVE CITY SIMULATION</span>
+    <h2 id="heroTitle">Build the city.<br><em>Own the future.</em></h2>
+    <p>Turn a small wallet into a business empire. Trade, acquire property, run companies and take calculated risks after dark.</p>
+    <div class="heroActions">
+      <button id="heroPrimaryButton" onclick="heroPrimaryAction()">Start your empire</button>
+      <button class="secondary" onclick="heroExplore()">Explore the city</button>
+    </div>
+    <div class="heroFeatureStrip">
+      <span><b>08</b> business types</span>
+      <span><b>24/7</b> living economy</span>
+      <span><b>01</b> city to conquer</span>
+    </div>
+  </div>
+  <aside class="heroIntel" aria-label="City intelligence">
+    <header><i></i><span>CITY INTELLIGENCE</span><b>ONLINE</b></header>
+    <div class="heroIntelGrid">
+      <span><small>STRATEGY</small><b>Build &amp; expand</b></span>
+      <span><small>ECONOMY</small><b>Trade &amp; invest</b></span>
+      <span><small>DISTRICTS</small><b>Own the map</b></span>
+      <span><small>NIGHTLIFE</small><b>Risk &amp; reward</b></span>
+    </div>
+    <footer><span></span><p>Every decision changes your position.</p></footer>
+  </aside>
+</section>
 
 <section id="stats" class="stats hidden">
   <div>Wallet <b id="wallet">0</b></div>
@@ -58,9 +89,19 @@
   </div>
 </section>
 
+<nav id="gameNav" class="gameNav hidden" aria-label="Game sections">
+  <a href="#bankPanel"><i>01</i>Treasury</a>
+  <a href="#lifePanel"><i>02</i>Life</a>
+  <a href="#propertyPanel"><i>03</i>Property</a>
+  <a href="#storePanel"><i>04</i>Retail</a>
+  <a href="#businessPanel"><i>05</i>Empire</a>
+  <a href="#marketPanel"><i>06</i>Market</a>
+  <a href="#casinoPanel"><i>07</i>Night district</a>
+</nav>
+
 <div class="layout">
-  <main class="mainGrid">
-    <section class="panel bankPanel">
+  <main id="gameMain" class="mainGrid">
+    <section id="bankPanel" class="panel bankPanel">
       <div class="head">
         <h2>Bank</h2>
         <button class="secondary" onclick="loadState()">Refresh</button>
@@ -318,7 +359,7 @@
     </section>
   </main>
 
-  <aside>
+  <aside class="commandRail">
     <section id="adminPanel" class="panel hidden">
       <h2>Admin</h2>
       <div class="adminTools">
@@ -328,12 +369,12 @@
       <div id="adminUsers" class="adminUsers"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel railPanel leaderboardPanel">
       <h2>Leaderboard</h2>
       <div id="leaderboard"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel railPanel activityPanel">
       <h2>Log</h2>
       <div id="log"></div>
     </section>

@@ -99,6 +99,7 @@ function hideError() {
 
 function render() {
   const user = STATE.user;
+  document.body.classList.toggle("gameReady", !!user);
   el("auth").classList.toggle("hidden", !!user);
   el("me").classList.toggle("hidden", !user);
   el("stats").classList.toggle("hidden", !user);
@@ -110,6 +111,8 @@ function render() {
   el("marketPanel").classList.toggle("hidden", !user);
   el("casinoPanel").classList.toggle("hidden", !user);
   el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
+  el("gameNav").classList.toggle("hidden", !user);
+  el("heroPrimaryButton").textContent = user ? "Enter city map" : "Start your empire";
 
   if (user) {
     for (const key of ["wallet", "bank", "debt", "rating", "score", "day"]) {
@@ -165,6 +168,24 @@ function closeCityMap() {
   cityMapOpen = false;
   document.body.classList.remove("cityOpen");
   renderCity();
+}
+
+function heroPrimaryAction() {
+  if (STATE.user) {
+    openCityMap();
+    return;
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  setTimeout(() => el("username")?.focus(), 350);
+}
+
+function heroExplore() {
+  if (STATE.user) {
+    el("bankPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  setTimeout(() => el("username")?.focus(), 350);
 }
 
 function selectCityView(view) {
