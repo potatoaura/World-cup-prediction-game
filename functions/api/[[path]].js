@@ -72,8 +72,27 @@ const LOTTERY_NUMBER_COUNT = 6;
 const LOTTERY_MAX_NUMBER = 49;
 const LOTTERY_PRIZES = { 2: 25, 3: 100, 4: 500, 5: 5000, 6: 50000 };
 const MINES_GRID_SIZE = 25;
-const MINES_MIN_COUNT = 10;
 const MINES_MIN_REVEALS = 2;
+const MINES_PRIZE_TILE_TYPES = {
+  x2: { label: "x2", multiplier: 2, loss: false },
+  x1_5: { label: "x1.5", multiplier: 1.5, loss: false },
+  x1_2: { label: "x1.2", multiplier: 1.2, loss: false },
+  x1: { label: "x1", multiplier: 1, loss: false },
+  x0_5: { label: "x0.5", multiplier: 0.5, loss: false },
+  x0_2: { label: "x0.2", multiplier: 0.2, loss: false },
+  x0: { label: "x0", multiplier: 0, loss: false },
+  lose: { label: "LOSE", multiplier: 0, loss: true },
+};
+const MINES_PRIZE_TILE_POOL = [
+  ...Array(3).fill("x2"),
+  ...Array(3).fill("x1_5"),
+  ...Array(3).fill("x1_2"),
+  ...Array(3).fill("x1"),
+  ...Array(3).fill("x0_5"),
+  ...Array(3).fill("x0_2"),
+  ...Array(3).fill("x0"),
+  ...Array(4).fill("lose"),
+];
 const BLACKJACK_SUITS = ["S", "H", "D", "C"];
 const BLACKJACK_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
@@ -2249,9 +2268,35 @@ export async function onRequest(context) {
   function publicMinesGame(row) {
     if (!row) return null;
     const revealed = JSON.parse(row.revealed_positions || "[]");
+    const board = JSON.parse(row.mine_positions || "[]");
+    if (!Array.isArray(board) && board?.mode === "prize_tiles" && Array.isArray(board.tiles)) {
+      const selectedPosition = revealed[0];
+      const selectedType = Number.isInteger(selectedPosition) ? MINES_PRIZE_TILE_TYPES[board.tiles[selectedPosition]] : null;
+      const settled = row.status !== "active" && row.status !== "resolving";
+      return {
+        id: row.id,
+        mode: "prize_tiles",
+        bet: Number(row.bet),
+        revealed,
+        status: row.status,
+        multiplier: selectedType?.multiplier || 0,
+        payout: Number(row.payout || 0),
+        cashout: Number(row.payout || 0),
+        createdAt: Number(row.created_at),
+        gridSize: MINES_GRID_SIZE,
+        result: settled && selectedType ? selectedType : null,
+        tiles: settled ? board.tiles.map(key => MINES_PRIZE_TILE_TYPES[key]) : null,
+        distribution: MINES_PRIZE_TILE_POOL.reduce((counts, key) => {
+          const label = MINES_PRIZE_TILE_TYPES[key].label;
+          counts[label] = (counts[label] || 0) + 1;
+          return counts;
+        }, {}),
+      };
+    }
     const multiplier = minesMultiplier(Number(row.mines), revealed.length);
     return {
       id: row.id,
+      mode: "legacy",
       bet: Number(row.bet),
       mines: Number(row.mines),
       revealed,
@@ -3639,13 +3684,11 @@ export async function onRequest(context) {
     if (action === "start") {
       if (game) return json({ error: "Finish the active Mines game first" }, 400);
       const amount = money(data.amount);
-      const mineCount = money(data.mines);
       if (amount < 1 || amount > user.wallet) return json({ error: "Bad amount / not enough wallet" }, 400);
-      if (mineCount < MINES_MIN_COUNT || mineCount > 20) return json({ error: `Choose ${MINES_MIN_COUNT} to 20 mines` }, 400);
-      const positions = secureShuffle(Array.from({ length: MINES_GRID_SIZE }, (_, index) => index)).slice(0, mineCount);
+      const board = { mode: "prize_tiles", tiles: secureShuffle(MINES_PRIZE_TILE_POOL) };
       game = {
-        id: crypto.randomUUID(), user_id: user.id, bet: amount, mines: mineCount,
-        mine_positions: JSON.stringify(positions), revealed_positions: "[]", status: "active", payout: 0, created_at: nowSeconds(),
+        id: crypto.randomUUID(), user_id: user.id, bet: amount, mines: 4,
+        mine_positions: JSON.stringify(board), revealed_positions: "[]", status: "active", payout: 0, created_at: nowSeconds(),
       };
       await DB.batch([
         DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(amount, user.id),
@@ -3653,7 +3696,7 @@ export async function onRequest(context) {
           INSERT INTO casino_mines_games (
             id, user_id, bet, mines, mine_positions, revealed_positions, status, payout, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, 'active', 0, ?)
-        `).bind(game.id, user.id, amount, mineCount, game.mine_positions, game.revealed_positions, game.created_at),
+        `).bind(game.id, user.id, amount, game.mines, game.mine_positions, game.revealed_positions, game.created_at),
       ]);
       return json({ game: publicMinesGame(game) });
     }
@@ -3662,9 +3705,35 @@ export async function onRequest(context) {
     if (action === "reveal") {
       const position = money(data.position);
       if (position < 0 || position >= MINES_GRID_SIZE) return json({ error: "Bad tile" }, 400);
-      const mines = JSON.parse(game.mine_positions || "[]");
+      const board = JSON.parse(game.mine_positions || "[]");
       const revealed = JSON.parse(game.revealed_positions || "[]");
       if (revealed.includes(position)) return json({ game: publicMinesGame(game), alreadyRevealed: true });
+
+      if (!Array.isArray(board) && board?.mode === "prize_tiles" && Array.isArray(board.tiles)) {
+        const tile = MINES_PRIZE_TILE_TYPES[board.tiles[position]];
+        if (!tile) return json({ error: "Invalid Mines board" }, 500);
+        const payout = Math.floor(Number(game.bet) * tile.multiplier);
+        const claim = await DB.prepare("UPDATE casino_mines_games SET status = 'resolving' WHERE id = ? AND status = 'active'")
+          .bind(game.id).run();
+        if (!Number(claim.meta?.changes || 0)) return json({ error: "Mines game is already settled" }, 409);
+        try {
+          const statements = [DB.prepare("UPDATE casino_mines_games SET revealed_positions = ?, status = 'settled', payout = ? WHERE id = ? AND status = 'resolving'")
+            .bind(JSON.stringify([position]), payout, game.id)];
+          if (payout > 0) statements.push(DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(payout, user.id));
+          await DB.batch(statements);
+        } catch (error) {
+          await DB.prepare("UPDATE casino_mines_games SET status = 'active' WHERE id = ? AND status = 'resolving'").bind(game.id).run();
+          throw error;
+        }
+        await recordCasinoPlay(user.id, "mines", Number(game.bet), payout, `${tile.label} at ${position + 1}`);
+        return json({
+          game: publicMinesGame({ ...game, revealed_positions: JSON.stringify([position]), status: "settled", payout }),
+          outcome: tile,
+          selectedPosition: position,
+        });
+      }
+
+      const mines = board;
       revealed.push(position);
       if (mines.includes(position)) {
         await DB.prepare("UPDATE casino_mines_games SET revealed_positions = ?, status = 'lost' WHERE id = ?")

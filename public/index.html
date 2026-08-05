@@ -247,14 +247,14 @@
         </article>
 
         <article class="casinoGameCard casinoWide minesCard">
-          <div class="casinoCardTitle"><i>MN</i><div><h3>Mines</h3><span>10-20 mines · reveal 2 safe tiles before cashing out</span></div></div>
+          <div class="casinoCardTitle"><i>MN</i><div><h3>Mines</h3><span>Pick one of 25 hidden tiles · exactly 3 are x2</span></div></div>
           <div class="casinoControls">
             <input id="minesAmount" type="number" value="20" min="1" aria-label="Mines bet">
-            <input id="minesCount" type="number" value="15" min="10" max="20" aria-label="Mine count">
             <button id="minesStartButton" onclick="minesStart()">Start game</button>
-            <button id="minesCashoutButton" class="secondary" onclick="minesCashout()" disabled>Cash out</button>
+            <button id="minesCashoutButton" class="secondary hidden" onclick="minesCashout()" disabled>Cash out legacy game</button>
           </div>
-          <div class="minesStatus"><span id="minesStatus">No active game</span><b id="minesMultiplier">1.00x</b></div>
+          <div class="minesLegend"><span>x2 ×3</span><span>x1.5 ×3</span><span>x1.2 ×3</span><span>x1 ×3</span><span>x0.5 ×3</span><span>x0.2 ×3</span><span>x0 ×3</span><span>LOSE ×4</span></div>
+          <div class="minesStatus"><span id="minesStatus">Start a game and choose one tile</span><b id="minesMultiplier">—</b></div>
           <div id="minesBoard" class="minesBoard"></div>
         </article>
 

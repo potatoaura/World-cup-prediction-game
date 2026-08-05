@@ -1483,21 +1483,37 @@ function renderMines(gameOverride = undefined) {
   if (!board) return;
   const game = gameOverride === undefined ? STATE.casino?.mines : gameOverride;
   const active = game?.status === "active";
+  const prizeMode = game?.mode === "prize_tiles";
+  const tiles = Array.isArray(game?.tiles) ? game.tiles : [];
   const revealed = new Set(game?.revealed || []);
-  const minimumReveals = Number(game?.minimumReveals || 2);
+  const selectedPosition = Number.isInteger(game?.revealed?.[0]) ? game.revealed[0] : -1;
   board.innerHTML = Array.from({ length: game?.gridSize || 25 }, (_, index) => `
-    <button class="mineTile ${revealed.has(index) ? "revealed" : ""}" onclick="minesReveal(${index})" ${!active || revealed.has(index) ? "disabled" : ""}>
-      ${revealed.has(index) ? "◆" : ""}
+    <button class="mineTile ${tiles[index] ? "revealed" : ""} ${index === selectedPosition ? "selected" : ""} ${tiles[index] ? (tiles[index].loss ? "mineHit" : Number(tiles[index].multiplier) > 1 ? "tileWin" : "tileLow") : ""}" onclick="minesReveal(${index})" ${!active || (!prizeMode && revealed.has(index)) ? "disabled" : ""}>
+      ${tiles[index] ? (tiles[index].loss ? "✹" : esc(tiles[index].label)) : (!prizeMode && revealed.has(index) ? "◆" : "")}
     </button>
   `).join("");
   el("minesStartButton").disabled = active;
-  el("minesCashoutButton").disabled = !active || revealed.size < minimumReveals;
-  el("minesCount").disabled = active;
+  const cashoutButton = el("minesCashoutButton");
+  const legacyMode = game?.mode === "legacy";
+  cashoutButton.classList.toggle("hidden", !legacyMode);
+  cashoutButton.disabled = !active || revealed.size < Number(game?.minimumReveals || 2);
   el("minesAmount").disabled = active;
-  el("minesStatus").textContent = game
-    ? `${game.status.replaceAll("_", " ")} · ${game.mines} mines · ${Math.min(revealed.size, minimumReveals)}/${minimumReveals} safe tiles · cash out ${game.cashout}`
-    : "No active game";
-  el("minesMultiplier").textContent = `${Number(game?.multiplier || 1).toFixed(2)}x`;
+  if (!game) {
+    el("minesStatus").textContent = "Start a game and choose one tile";
+    el("minesMultiplier").textContent = "—";
+  } else if (prizeMode && active) {
+    el("minesStatus").textContent = "Choose one hidden tile";
+    el("minesMultiplier").textContent = "?";
+  } else if (prizeMode && game.result) {
+    el("minesStatus").textContent = game.result.loss
+      ? "Mine · bet lost"
+      : `${game.result.label} · payout ${game.payout}`;
+    el("minesMultiplier").textContent = game.result.label;
+  } else {
+    const minimumReveals = Number(game?.minimumReveals || 2);
+    el("minesStatus").textContent = `${game.status.replaceAll("_", " ")} · ${game.mines} mines · ${Math.min(revealed.size, minimumReveals)}/${minimumReveals} safe tiles · cash out ${game.cashout}`;
+    el("minesMultiplier").textContent = `${Number(game?.multiplier || 1).toFixed(2)}x`;
+  }
 }
 
 async function minesStart() {
@@ -1505,7 +1521,6 @@ async function minesStart() {
     const result = await api("/api/casino/mines", {
       action: "start",
       amount: Number(el("minesAmount").value),
-      mines: Number(el("minesCount").value),
     });
     STATE.casino = { ...(STATE.casino || {}), mines: result.game };
     renderMines();
@@ -1520,6 +1535,13 @@ async function minesReveal(position) {
     const result = await api("/api/casino/mines", { action: "reveal", position });
     STATE.casino = { ...(STATE.casino || {}), mines: result.game };
     renderMines();
+    if (result.game?.mode === "prize_tiles") {
+      log(result.outcome?.loss
+        ? "Mines: losing tile"
+        : `Mines: ${result.outcome?.label} paid ${result.game.payout}`);
+      setTimeout(() => loadState(), 2500);
+      return;
+    }
     if (result.hitMine) {
       const tile = el("minesBoard")?.children[result.mineIndex];
       if (tile) {

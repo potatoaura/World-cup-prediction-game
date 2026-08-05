@@ -342,34 +342,26 @@ try {
   assert(slotPlay.reels?.length === 3, "slot reels missing");
   assert(slotPlay.odds?.jackpot === 0.0005 && slotPlay.odds?.anyWin === 0.01, "slot odds are not reduced");
 
-  let minesResult;
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await request("/api/casino/mines", {
-      method: "POST",
-      body: { action: "start", amount: 10, mines: 10 },
-      session: casinoOwner,
-    });
-    minesResult = await request("/api/casino/mines", {
-      method: "POST",
-      body: { action: "reveal", position: 0 },
-      session: casinoOwner,
-    });
-    if (minesResult.hitMine) continue;
-    minesResult = await request("/api/casino/mines", {
-      method: "POST",
-      body: { action: "reveal", position: 1 },
-      session: casinoOwner,
-    });
-    if (!minesResult.hitMine) break;
-  }
-  assert(minesResult && !minesResult.hitMine && minesResult.game.status === "active", "could not reveal two safe Mines tiles");
-  assert(minesResult.game.revealed.length === 2 && minesResult.game.minimumReveals === 2, "Mines cashout threshold is not two tiles");
-  const minesCashout = await request("/api/casino/mines", {
+  const minesStart = await request("/api/casino/mines", {
     method: "POST",
-    body: { action: "cashout" },
+    body: { action: "start", amount: 10 },
     session: casinoOwner,
   });
-  assert(minesCashout.game.status === "cashed_out" && minesCashout.game.payout > 0, "Mines cashout failed");
+  assert(minesStart.game.mode === "prize_tiles" && minesStart.game.tiles === null, "Mines prize board leaked before selection");
+  assert(minesStart.game.distribution?.x2 === 3 && minesStart.game.distribution?.LOSE === 4, "Mines distribution is invalid");
+  const minesResult = await request("/api/casino/mines", {
+    method: "POST",
+    body: { action: "reveal", position: 0 },
+    session: casinoOwner,
+  });
+  assert(minesResult.game.status === "settled" && minesResult.game.revealed[0] === 0, "Mines pick did not settle");
+  assert(minesResult.game.tiles?.length === 25 && minesResult.game.result?.label, "Mines result board is missing");
+  const minesLabels = minesResult.game.tiles.map(tile => tile.label);
+  for (const label of ["x2", "x1.5", "x1.2", "x1", "x0.5", "x0.2", "x0"]) {
+    assert(minesLabels.filter(value => value === label).length === 3, `Mines ${label} tile count is invalid`);
+  }
+  assert(minesLabels.filter(value => value === "LOSE").length === 4, "Mines losing tile count is invalid");
+  assert(minesResult.game.payout === Math.floor(10 * minesResult.game.result.multiplier), "Mines payout does not match its tile");
 
   let blackjackStart;
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -854,7 +846,7 @@ try {
     diceResult: dicePlay.result,
     crashPoint: crashPlay.crashPoint,
     fortuneSegment: fortunePlay.label,
-    minesPayout: minesCashout.game.payout,
+    minesPayout: minesResult.game.payout,
     scratchPrize: scratchClaim.ticket.prize,
     lotteryNumbers: lotteryBuy.ticket.numbers,
   }, null, 2));
