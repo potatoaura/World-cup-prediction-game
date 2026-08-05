@@ -35,6 +35,36 @@ const SLOT_JACKPOT_CHANCE = 0.0005;
 const SLOT_TRIPLE_CHANCE = 0.003;
 const SLOT_ANY_WIN_CHANCE = 0.01;
 const ROULETTE_WIN_CHANCE = 0.015;
+const SCRATCH_TICKET_TYPES = [
+  {
+    id: "lucky_sevens", name: "Lucky Sevens", badge: "7", theme: "ruby", price: 5,
+    mode: "match3", rule: "Match 3 identical symbols", winChance: 0.18,
+    symbols: ["7", "STAR", "CROWN", "BAR", "COIN"],
+    prizes: [{ amount: 10, weight: 72 }, { amount: 25, weight: 23 }, { amount: 50, weight: 5 }],
+  },
+  {
+    id: "golden_numbers", name: "Golden Numbers", badge: "24", theme: "gold", price: 10,
+    mode: "numbers", rule: "Match one of 2 winning numbers", winChance: 0.14,
+    prizes: [{ amount: 20, weight: 74 }, { amount: 75, weight: 22 }, { amount: 200, weight: 4 }],
+  },
+  {
+    id: "gem_hunt", name: "Gem Hunt", badge: "GEM", theme: "aqua", price: 25,
+    mode: "find3", rule: "Find 3 DIAMOND symbols", winChance: 0.1, target: "DIAMOND",
+    symbols: ["STAR", "CROWN", "7", "COIN", "BAR"],
+    prizes: [{ amount: 75, weight: 76 }, { amount: 250, weight: 20 }, { amount: 750, weight: 4 }],
+  },
+  {
+    id: "cash_vault", name: "Cash Vault", badge: "CV", theme: "emerald", price: 50,
+    mode: "numbers", rule: "Match one of 2 vault numbers", winChance: 0.07,
+    prizes: [{ amount: 150, weight: 78 }, { amount: 500, weight: 19 }, { amount: 1500, weight: 3 }],
+  },
+  {
+    id: "mega_fortune", name: "Mega Fortune", badge: "MF", theme: "violet", price: 100,
+    mode: "match3", rule: "Match 3 identical fortune symbols", winChance: 0.04,
+    symbols: ["CROWN", "DIAMOND", "7", "STAR", "COIN"],
+    prizes: [{ amount: 500, weight: 82 }, { amount: 2000, weight: 16 }, { amount: 5000, weight: 2 }],
+  },
+];
 const LOTTERY_TICKET_PRICE = 25;
 const LOTTERY_DRAW_SECONDS = 300;
 const LOTTERY_NUMBER_COUNT = 6;
@@ -799,6 +829,64 @@ function secureShuffle(items) {
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
   return shuffled;
+}
+
+function scratchTicketType(typeId) {
+  const id = String(typeId || "").trim().toLowerCase();
+  return SCRATCH_TICKET_TYPES.find(type => type.id === id) || null;
+}
+
+function publicScratchType(type) {
+  return {
+    id: type.id,
+    name: type.name,
+    badge: type.badge,
+    theme: type.theme,
+    price: type.price,
+    mode: type.mode,
+    rule: type.rule,
+    winChance: type.winChance,
+    topPrize: Math.max(...type.prizes.map(prize => prize.amount)),
+    prizes: type.prizes.map(prize => prize.amount),
+  };
+}
+
+function scratchTicketPrize(type) {
+  if (secureRandomUnit() >= type.winChance) return 0;
+  const totalWeight = type.prizes.reduce((sum, prize) => sum + prize.weight, 0);
+  let roll = secureRandomInt(totalWeight);
+  for (const prize of type.prizes) {
+    if (roll < prize.weight) return prize.amount;
+    roll -= prize.weight;
+  }
+  return type.prizes[0].amount;
+}
+
+function uniqueScratchNumbers(count, excluded = []) {
+  const excludedNumbers = new Set(excluded);
+  return secureShuffle(Array.from({ length: 30 }, (_, index) => index + 1).filter(number => !excludedNumbers.has(number)))
+    .slice(0, count);
+}
+
+function scratchTicketResult(type, prize) {
+  if (type.mode === "numbers") {
+    const winningNumbers = uniqueScratchNumbers(2);
+    const numbers = prize > 0
+      ? secureShuffle([winningNumbers[secureRandomInt(winningNumbers.length)], ...uniqueScratchNumbers(7, winningNumbers)])
+      : uniqueScratchNumbers(8, winningNumbers);
+    return { mode: type.mode, winningNumbers, numbers };
+  }
+  if (type.mode === "find3") {
+    const targetCount = prize > 0 ? 3 : secureRandomInt(3);
+    const fillers = Array.from({ length: 9 - targetCount }, (_, index) => type.symbols[index % type.symbols.length]);
+    return { mode: type.mode, target: type.target, cells: secureShuffle([...Array(targetCount).fill(type.target), ...fillers]) };
+  }
+  if (prize > 0) {
+    const winner = type.symbols[secureRandomInt(type.symbols.length)];
+    const fillers = secureShuffle(type.symbols.filter(symbol => symbol !== winner).flatMap(symbol => [symbol, symbol])).slice(0, 6);
+    return { mode: type.mode, cells: secureShuffle([winner, winner, winner, ...fillers]) };
+  }
+  return { mode: type.mode, cells: secureShuffle(type.symbols.flatMap(symbol => [symbol, symbol])).slice(0, 9) };
 }
 
 function lotteryNumbers() {
@@ -2192,10 +2280,34 @@ export async function onRequest(context) {
     };
   }
 
+  function publicScratchTicket(row) {
+    if (!row) return null;
+    const type = scratchTicketType(row.ticket_type);
+    return {
+      id: row.id,
+      typeId: row.ticket_type,
+      name: type?.name || row.ticket_type,
+      theme: type?.theme || "gold",
+      price: Number(row.price),
+      prize: Number(row.prize || 0),
+      status: row.status,
+      result: JSON.parse(row.result || "{}"),
+      purchasedAt: Number(row.purchased_at),
+      claimedAt: row.claimed_at ? Number(row.claimed_at) : null,
+    };
+  }
+
   async function casinoState(userId) {
-    const [mines, blackjack, plays] = await Promise.all([
+    const [mines, blackjack, scratchTickets, plays] = await Promise.all([
       DB.prepare("SELECT * FROM casino_mines_games WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1").bind(userId).first(),
       DB.prepare("SELECT * FROM casino_blackjack_games WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1").bind(userId).first(),
+      DB.prepare(`
+        SELECT id, ticket_type, price, result, prize, status, purchased_at, claimed_at
+        FROM scratch_tickets
+        WHERE user_id = ?
+        ORDER BY purchased_at DESC
+        LIMIT 12
+      `).bind(userId).all(),
       DB.prepare(`
         SELECT game, bet, payout, result, created_at
         FROM casino_plays
@@ -2207,6 +2319,8 @@ export async function onRequest(context) {
     return {
       mines: publicMinesGame(mines),
       blackjack: publicBlackjackGame(blackjack),
+      scratchCatalog: SCRATCH_TICKET_TYPES.map(publicScratchType),
+      scratchTickets: scratchTickets.results.map(publicScratchTicket),
       fortuneSegments: FORTUNE_WHEEL_SEGMENTS.map(({ weight, ...segment }) => segment),
       recent: plays.results.map(play => ({
         game: play.game,
@@ -3361,6 +3475,72 @@ export async function onRequest(context) {
     return json({ ok: true, businesses: await businessState(user.id) });
   }
 
+  if (path === "/casino/scratch" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+
+    if (action === "buy") {
+      const type = scratchTicketType(data.ticketType);
+      if (!type) return json({ error: "Unknown scratch ticket" }, 404);
+      const freshUser = await userById(user.id);
+      if (Number(freshUser.wallet) < type.price) return json({ error: `Ticket costs ${type.price}` }, 400);
+      const prize = scratchTicketPrize(type);
+      const result = scratchTicketResult(type, prize);
+      const ticket = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        ticket_type: type.id,
+        price: type.price,
+        result: JSON.stringify(result),
+        prize,
+        status: "revealed",
+        purchased_at: nowSeconds(),
+        claimed_at: null,
+      };
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(type.price, user.id),
+        DB.prepare(`
+          INSERT INTO scratch_tickets (
+            id, user_id, ticket_type, price, result, prize, status, purchased_at, claimed_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 'revealed', ?, NULL)
+        `).bind(ticket.id, ticket.user_id, ticket.ticket_type, ticket.price, ticket.result, ticket.prize, ticket.purchased_at),
+      ]);
+      return json({ ok: true, ticket: publicScratchTicket(ticket) });
+    }
+
+    if (action === "claim") {
+      const ticketId = String(data.ticketId || "");
+      const ticket = await DB.prepare("SELECT * FROM scratch_tickets WHERE id = ? AND user_id = ?")
+        .bind(ticketId, user.id).first();
+      if (!ticket) return json({ error: "Scratch ticket not found" }, 404);
+      if (ticket.status === "claimed") return json({ ok: true, alreadyClaimed: true, ticket: publicScratchTicket(ticket) });
+      const claim = await DB.prepare("UPDATE scratch_tickets SET status = 'resolving' WHERE id = ? AND user_id = ? AND status = 'revealed'")
+        .bind(ticket.id, user.id).run();
+      if (!Number(claim.meta?.changes || 0)) return json({ error: "Scratch ticket is already being claimed" }, 409);
+      const claimedAt = nowSeconds();
+      try {
+        await DB.batch([
+          DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(Number(ticket.prize), user.id),
+          DB.prepare("UPDATE scratch_tickets SET status = 'claimed', claimed_at = ? WHERE id = ? AND status = 'resolving'")
+            .bind(claimedAt, ticket.id),
+        ]);
+      } catch (error) {
+        await DB.prepare("UPDATE scratch_tickets SET status = 'revealed' WHERE id = ? AND status = 'resolving'").bind(ticket.id).run();
+        throw error;
+      }
+      const type = scratchTicketType(ticket.ticket_type);
+      await recordCasinoPlay(user.id, `scratch-${ticket.ticket_type}`, Number(ticket.price), Number(ticket.prize),
+        Number(ticket.prize) > 0 ? `${type?.name || ticket.ticket_type} prize ${ticket.prize}` : `${type?.name || ticket.ticket_type} no prize`);
+      return json({
+        ok: true,
+        ticket: publicScratchTicket({ ...ticket, status: "claimed", claimed_at: claimedAt }),
+        wallet: Number((await userById(user.id)).wallet),
+      });
+    }
+
+    return json({ error: "Bad scratch ticket action" }, 400);
+  }
+
   if (path === "/lottery" && request.method === "POST") {
     const data = await body();
     if (String(data.action || "") !== "buy") return json({ error: "Bad lottery action" }, 400);
@@ -4038,6 +4218,19 @@ async function ensureRuntimeTables(DB) {
         purchased_at INTEGER NOT NULL
       )
     `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS scratch_tickets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        ticket_type TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        result TEXT NOT NULL,
+        prize INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'revealed',
+        purchased_at INTEGER NOT NULL,
+        claimed_at INTEGER
+      )
+    `),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at)"),
@@ -4048,6 +4241,7 @@ async function ensureRuntimeTables(DB) {
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_lottery_draws_status_time ON lottery_draws(status, draw_at)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_lottery_tickets_user_time ON lottery_tickets(user_id, purchased_at)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_lottery_tickets_draw ON lottery_tickets(draw_id, status)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_scratch_tickets_user_time ON scratch_tickets(user_id, purchased_at)"),
     ...MARKET_ASSETS.map(asset => DB.prepare(`
       INSERT INTO market_assets (symbol, name, price, previous_price, volatility, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)

@@ -281,6 +281,36 @@ try {
   const businessReady = await request("/api/state", { session: casinoOwner });
   assert(businessReady.businesses.owned.length === 2, "business purchases did not persist");
   assert(businessReady.businesses.owned.find(item => item.id === "coffee_shop")?.level === 2, "business upgrade did not persist");
+  assert(businessReady.casino.scratchCatalog?.length === 5, "scratch ticket catalog should contain five designs");
+  assert(businessReady.casino.scratchCatalog.some(type => type.mode === "numbers"), "number scratch ticket missing");
+  assert(businessReady.casino.scratchCatalog.some(type => type.mode === "match3"), "symbol scratch ticket missing");
+
+  const numberScratch = await request("/api/casino/scratch", {
+    method: "POST",
+    body: { action: "buy", ticketType: "golden_numbers" },
+    session: casinoOwner,
+  });
+  assert(numberScratch.ticket.status === "revealed", "number scratch ticket was not created");
+  assert(numberScratch.ticket.result?.winningNumbers?.length === 2, "scratch winning numbers missing");
+  assert(numberScratch.ticket.result?.numbers?.length === 8, "scratch player numbers missing");
+  const symbolScratch = await request("/api/casino/scratch", {
+    method: "POST",
+    body: { action: "buy", ticketType: "gem_hunt" },
+    session: casinoOwner,
+  });
+  assert(symbolScratch.ticket.result?.cells?.length === 9, "symbol scratch cells missing");
+  const scratchClaim = await request("/api/casino/scratch", {
+    method: "POST",
+    body: { action: "claim", ticketId: numberScratch.ticket.id },
+    session: casinoOwner,
+  });
+  assert(scratchClaim.ticket.status === "claimed", "scratch ticket claim failed");
+  const duplicateScratchClaim = await request("/api/casino/scratch", {
+    method: "POST",
+    body: { action: "claim", ticketId: numberScratch.ticket.id },
+    session: casinoOwner,
+  });
+  assert(duplicateScratchClaim.alreadyClaimed === true, "scratch ticket could be claimed twice");
 
   const dicePlay = await request("/api/casino/dice", {
     method: "POST",
@@ -363,6 +393,8 @@ try {
   const casinoReady = await request("/api/state", { session: casinoOwner });
   assert(casinoReady.lottery.tickets.some(ticket => ticket.id === lotteryBuy.ticket.id), "lottery ticket was not persisted");
   assert(casinoReady.casino.recent.some(play => play.game === "dice"), "casino history missing dice play");
+  assert(casinoReady.casino.scratchTickets.some(ticket => ticket.id === numberScratch.ticket.id && ticket.status === "claimed"), "claimed scratch ticket was not persisted");
+  assert(casinoReady.casino.recent.some(play => play.game === "scratch-golden_numbers"), "casino history missing scratch ticket");
 
   const registeredPropertyBuyer = await request("/api/register", {
     method: "POST",
@@ -815,6 +847,7 @@ try {
     crashPoint: crashPlay.crashPoint,
     fortuneSegment: fortunePlay.label,
     minesPayout: minesCashout.game.payout,
+    scratchPrize: scratchClaim.ticket.prize,
     lotteryNumbers: lotteryBuy.ticket.numbers,
   }, null, 2));
 } catch (error) {

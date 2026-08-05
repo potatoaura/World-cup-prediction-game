@@ -353,6 +353,18 @@ CREATE TABLE IF NOT EXISTS lottery_tickets (
   purchased_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS scratch_tickets (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  ticket_type TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  result TEXT NOT NULL,
+  prize INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'revealed',
+  purchased_at INTEGER NOT NULL,
+  claimed_at INTEGER
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_predictions_match_id ON predictions(match_id);
 CREATE INDEX IF NOT EXISTS idx_bets_match_status ON bets(match_id, status);
@@ -384,3 +396,4 @@ CREATE INDEX IF NOT EXISTS idx_casino_blackjack_user_status ON casino_blackjack_
 CREATE INDEX IF NOT EXISTS idx_lottery_draws_status_time ON lottery_draws(status, draw_at);
 CREATE INDEX IF NOT EXISTS idx_lottery_tickets_user_time ON lottery_tickets(user_id, purchased_at);
 CREATE INDEX IF NOT EXISTS idx_lottery_tickets_draw ON lottery_tickets(draw_id, status);
+CREATE INDEX IF NOT EXISTS idx_scratch_tickets_user_time ON scratch_tickets(user_id, purchased_at);
