@@ -1630,17 +1630,18 @@ function renderMines(gameOverride = undefined) {
   const game = gameOverride === undefined ? STATE.casino?.mines : gameOverride;
   const active = game?.status === "active";
   const revealed = new Set(game?.revealed || []);
+  const minimumReveals = Number(game?.minimumReveals || 2);
   board.innerHTML = Array.from({ length: game?.gridSize || 25 }, (_, index) => `
     <button class="mineTile ${revealed.has(index) ? "revealed" : ""}" onclick="minesReveal(${index})" ${!active || revealed.has(index) ? "disabled" : ""}>
       ${revealed.has(index) ? "◆" : ""}
     </button>
   `).join("");
   el("minesStartButton").disabled = active;
-  el("minesCashoutButton").disabled = !active || !revealed.size;
+  el("minesCashoutButton").disabled = !active || revealed.size < minimumReveals;
   el("minesCount").disabled = active;
   el("minesAmount").disabled = active;
   el("minesStatus").textContent = game
-    ? `${game.status.replaceAll("_", " ")} · ${game.mines} mines · cash out ${game.cashout}`
+    ? `${game.status.replaceAll("_", " ")} · ${game.mines} mines · ${Math.min(revealed.size, minimumReveals)}/${minimumReveals} safe tiles · cash out ${game.cashout}`
     : "No active game";
   el("minesMultiplier").textContent = `${Number(game?.multiplier || 1).toFixed(2)}x`;
 }
