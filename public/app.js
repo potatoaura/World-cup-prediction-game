@@ -19,6 +19,8 @@ let activeStoreId = "";
 let activeStoreProductId = "";
 let cityMapOpen = false;
 let activeCityView = "hq";
+let activeScratchTicketId = "";
+const scratchClaimsInFlight = new Set();
 
 const MARKET_DETAIL_RANGES = [
   { id: "5m", label: "5M", seconds: 5 * 60 },
@@ -137,6 +139,7 @@ function render() {
   renderCity();
   renderMines();
   renderBlackjack();
+  renderScratchTickets();
   renderLottery();
   renderCasinoRecent();
   renderClock();
@@ -1728,6 +1731,193 @@ async function blackjackAction(action) {
     else setTimeout(() => loadState(), 1400);
   } catch (error) {
     alert(error.message);
+  }
+}
+
+function scratchSymbol(symbol) {
+  return ({
+    STAR: "★",
+    CROWN: "♛",
+    BAR: "BAR",
+    COIN: "$",
+    DIAMOND: "◆",
+    "7": "7",
+  })[symbol] || esc(symbol);
+}
+
+function scratchResultMarkup(ticket) {
+  const result = ticket.result || {};
+  if (result.mode === "numbers") {
+    return `
+      <div class="scratchWinningNumbers">
+        <small>WINNING NUMBERS</small>
+        <div>${(result.winningNumbers || []).map(number => `<i>${number}</i>`).join("")}</div>
+      </div>
+      <div class="scratchYourNumbers">
+        <small>YOUR NUMBERS</small>
+        <div>${(result.numbers || []).map(number => `<i>${number}</i>`).join("")}</div>
+      </div>
+    `;
+  }
+  return `
+    <div class="scratchSymbolGrid">
+      ${(result.cells || []).map(symbol => `<i title="${esc(symbol)}">${scratchSymbol(symbol)}</i>`).join("")}
+    </div>
+  `;
+}
+
+function renderScratchTickets() {
+  const catalogBox = el("scratchCatalog");
+  const stage = el("scratchStage");
+  const history = el("scratchHistory");
+  if (!catalogBox || !stage || !history) return;
+  const catalog = STATE.casino?.scratchCatalog || [];
+  const tickets = STATE.casino?.scratchTickets || [];
+  catalogBox.innerHTML = catalog.map(type => `
+    <article class="scratchShopCard theme-${esc(type.theme)}">
+      <span class="scratchShopBadge">${esc(type.badge)}</span>
+      <div><b>${esc(type.name)}</b><small>${esc(type.rule)}</small></div>
+      <p><span>${Math.round(Number(type.winChance) * 100)}% win</span><span>Top ${type.topPrize}</span></p>
+      <button onclick="buyScratchTicket('${type.id}')">Buy · ${type.price}</button>
+    </article>
+  `).join("");
+
+  if (!tickets.some(ticket => ticket.id === activeScratchTicketId)) {
+    activeScratchTicketId = tickets.find(ticket => ticket.status !== "claimed")?.id || tickets[0]?.id || "";
+  }
+  const ticket = tickets.find(item => item.id === activeScratchTicketId);
+  if (!ticket) {
+    stage.innerHTML = `<div class="casinoEmpty">Choose one of the scratch tickets above.</div>`;
+  } else {
+    const claimed = ticket.status === "claimed";
+    stage.innerHTML = `
+      <article class="scratchTicket theme-${esc(ticket.theme)} ${claimed ? "claimed" : ""}">
+        <header><span>INSTANT WIN</span><b>${esc(ticket.name)}</b><em>Ticket ${ticket.price}</em></header>
+        <div class="scratchRevealArea">
+          <div class="scratchResult">${scratchResultMarkup(ticket)}</div>
+          ${claimed ? "" : `<canvas id="scratchCanvas" aria-label="Scratch coating for ${esc(ticket.name)}"></canvas>`}
+        </div>
+        <footer>
+          <span id="scratchMessage">${claimed ? (ticket.prize ? `WINNER · +${ticket.prize}` : "NO PRIZE · TRY ANOTHER") : "Scratch at least half of the silver area"}</span>
+          ${claimed ? "" : `<button class="secondary" onclick="scratchRevealAll('${ticket.id}')">Reveal all</button>`}
+        </footer>
+      </article>
+    `;
+    if (!claimed) requestAnimationFrame(() => setupScratchCanvas(ticket.id));
+  }
+
+  history.innerHTML = tickets.length ? tickets.slice(0, 8).map(ticket => `
+    <button class="${ticket.id === activeScratchTicketId ? "active" : ""}" onclick="selectScratchTicket('${ticket.id}')">
+      <b>${esc(ticket.name)}</b><span>${ticket.status === "claimed" ? (ticket.prize ? `Won ${ticket.prize}` : "No prize") : "Ready to scratch"}</span>
+    </button>
+  `).join("") : "";
+}
+
+function selectScratchTicket(ticketId) {
+  activeScratchTicketId = ticketId;
+  renderScratchTickets();
+}
+
+async function buyScratchTicket(ticketType) {
+  try {
+    const result = await api("/api/casino/scratch", { action: "buy", ticketType });
+    activeScratchTicketId = result.ticket.id;
+    log(`Scratch ticket bought: ${result.ticket.name}`);
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function setupScratchCanvas(ticketId) {
+  const canvas = el("scratchCanvas");
+  if (!canvas || activeScratchTicketId !== ticketId || canvas.dataset.ready) return;
+  const area = canvas.parentElement;
+  const bounds = area.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const scale = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(bounds.width * scale);
+  canvas.height = Math.round(bounds.height * scale);
+  canvas.dataset.ready = "true";
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.setTransform(scale, 0, 0, scale, 0, 0);
+  const silver = context.createLinearGradient(0, 0, bounds.width, bounds.height);
+  silver.addColorStop(0, "#727b80");
+  silver.addColorStop(0.45, "#e1e4e4");
+  silver.addColorStop(1, "#687176");
+  context.fillStyle = silver;
+  context.fillRect(0, 0, bounds.width, bounds.height);
+  context.fillStyle = "rgba(255,255,255,.24)";
+  for (let index = 0; index < 42; index++) {
+    const x = (index * 73) % Math.max(1, bounds.width);
+    const y = (index * 41) % Math.max(1, bounds.height);
+    context.fillRect(x, y, 18, 2);
+  }
+  context.fillStyle = "rgba(24,31,34,.7)";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `900 ${Math.max(16, Math.min(25, bounds.width / 15))}px Arial`;
+  context.fillText("SCRATCH HERE", bounds.width / 2, bounds.height / 2);
+  context.globalCompositeOperation = "destination-out";
+
+  let scratching = false;
+  let moveCount = 0;
+  const scratchAt = event => {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    context.beginPath();
+    context.arc(x, y, 25, 0, Math.PI * 2);
+    context.fill();
+    moveCount += 1;
+  };
+  const checkCoverage = () => {
+    if (moveCount < 5) return;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let transparent = 0;
+    let sampled = 0;
+    for (let index = 3; index < pixels.length; index += 80) {
+      sampled += 1;
+      if (pixels[index] < 40) transparent += 1;
+    }
+    if (sampled && transparent / sampled >= 0.5) claimScratchTicket(ticketId);
+  };
+  canvas.addEventListener("pointerdown", event => {
+    scratching = true;
+    canvas.setPointerCapture(event.pointerId);
+    scratchAt(event);
+  });
+  canvas.addEventListener("pointermove", event => {
+    if (!scratching) return;
+    for (const point of event.getCoalescedEvents?.() || [event]) scratchAt(point);
+  });
+  canvas.addEventListener("pointerup", () => {
+    scratching = false;
+    checkCoverage();
+  });
+  canvas.addEventListener("pointercancel", () => { scratching = false; });
+}
+
+function scratchRevealAll(ticketId) {
+  const canvas = el("scratchCanvas");
+  const context = canvas?.getContext("2d");
+  if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+  claimScratchTicket(ticketId);
+}
+
+async function claimScratchTicket(ticketId) {
+  if (scratchClaimsInFlight.has(ticketId)) return;
+  scratchClaimsInFlight.add(ticketId);
+  try {
+    const message = el("scratchMessage");
+    if (message) message.textContent = "Checking ticket...";
+    const result = await api("/api/casino/scratch", { action: "claim", ticketId });
+    log(result.ticket.prize ? `Scratch ticket won ${result.ticket.prize}` : "Scratch ticket: no prize");
+    await loadState();
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    scratchClaimsInFlight.delete(ticketId);
   }
 }
 

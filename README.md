@@ -92,6 +92,8 @@ Casino behavior:
 - Wheel of Fortune uses weighted server-side segments, with an 18% chance to win more than the bet and prizes up to 10x.
 - Lottery tickets cost 25, contain six unique numbers from 1-49, and join five-minute shared draws.
 - Lottery draws settle when the API is next visited after the draw time; prizes are credited directly to winners' wallets.
+- Five scratch-ticket designs cost 5-100 wallet and use symbol matching, number matching, or find-three rules.
+- Scratch results are generated with server-side Web Crypto, stored in D1, and can be claimed only once after the coating is scratched or revealed.
 
 Business behavior:
 
