@@ -5,6 +5,46 @@ const ROULETTE_NUMBERS = [
   5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
 ];
 
+const BUSINESS_TYPES = [
+  { id: "coffee_shop", name: "Coffee Shop", badge: "CO", price: 15000, income: 900, upkeep: 250, rating: 450, description: "A compact cafe with dependable daily traffic." },
+  { id: "pizza_restaurant", name: "Pizza Restaurant", badge: "PZ", price: 35000, income: 2200, upkeep: 700, rating: 500, description: "A delivery-first restaurant with strong evening sales." },
+  { id: "hotel", name: "Hotel", badge: "HT", price: 320000, income: 26000, upkeep: 9000, rating: 650, description: "Rooms, events and premium city visitors." },
+  { id: "gas_station", name: "Gas Station", badge: "GS", price: 90000, income: 6000, upkeep: 2000, rating: 550, description: "Fuel and convenience sales around the clock." },
+  { id: "supermarket", name: "Supermarket", badge: "SM", price: 180000, income: 13500, upkeep: 4500, rating: 600, description: "A high-volume grocery business with broad demand." },
+  { id: "casino", name: "Casino", badge: "CA", price: 650000, income: 60000, upkeep: 23000, rating: 700, description: "A licensed gaming venue with large operating costs." },
+  { id: "football_club", name: "Football Club", badge: "FC", price: 1200000, income: 120000, upkeep: 55000, rating: 720, description: "Tickets, sponsors and a professional squad." },
+  { id: "bank", name: "Bank", badge: "BK", price: 2500000, income: 260000, upkeep: 120000, rating: 750, description: "The city's most expensive financial institution." },
+];
+
+const FORTUNE_WHEEL_SEGMENTS = [
+  { label: "BANKRUPT", multiplier: 0, weight: 28 },
+  { label: "LOSE", multiplier: 0, weight: 24 },
+  { label: "HALF", multiplier: 0.5, weight: 16 },
+  { label: "REFUND", multiplier: 1, weight: 14 },
+  { label: "x1.5", multiplier: 1.5, weight: 8 },
+  { label: "x2", multiplier: 2, weight: 5 },
+  { label: "x3", multiplier: 3, weight: 3 },
+  { label: "x5", multiplier: 5, weight: 1 },
+  { label: "JACKPOT x10", multiplier: 10, weight: 1 },
+];
+
+const DICE_WIN_CHANCE = 0.1;
+const CRASH_HOUSE_FACTOR = 0.82;
+const FORTUNE_WIN_CHANCE = 0.18;
+const SLOT_JACKPOT_CHANCE = 0.0005;
+const SLOT_TRIPLE_CHANCE = 0.003;
+const SLOT_ANY_WIN_CHANCE = 0.01;
+const ROULETTE_WIN_CHANCE = 0.015;
+const LOTTERY_TICKET_PRICE = 25;
+const LOTTERY_DRAW_SECONDS = 300;
+const LOTTERY_NUMBER_COUNT = 6;
+const LOTTERY_MAX_NUMBER = 49;
+const LOTTERY_PRIZES = { 2: 25, 3: 100, 4: 500, 5: 5000, 6: 50000 };
+const MINES_GRID_SIZE = 25;
+const MINES_MIN_COUNT = 3;
+const BLACKJACK_SUITS = ["S", "H", "D", "C"];
+const BLACKJACK_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+
 const WORK_QUEST_POOL = [
   {
     title: "Deliver stadium flyers",
@@ -735,6 +775,70 @@ const STORE_MARKUPS = [
   { value: 1.2, label: "High", demand: 0.82 },
   { value: 1.45, label: "Premium", demand: 0.62 },
 ];
+
+function secureRandomInt(maxExclusive) {
+  const max = Math.floor(Number(maxExclusive));
+  if (!Number.isFinite(max) || max < 1 || max > 0x100000000) throw new Error("Bad random range");
+  const range = 0x100000000;
+  const limit = Math.floor(range / max) * max;
+  const values = new Uint32Array(1);
+  do {
+    crypto.getRandomValues(values);
+  } while (values[0] >= limit);
+  return values[0] % max;
+}
+
+function secureRandomUnit() {
+  return secureRandomInt(1_000_000) / 1_000_000;
+}
+
+function secureShuffle(items) {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const swapIndex = secureRandomInt(index + 1);
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+function lotteryNumbers() {
+  return secureShuffle(Array.from({ length: LOTTERY_MAX_NUMBER }, (_, index) => index + 1))
+    .slice(0, LOTTERY_NUMBER_COUNT)
+    .sort((left, right) => left - right);
+}
+
+function blackjackDeck() {
+  return secureShuffle(BLACKJACK_SUITS.flatMap(suit => BLACKJACK_RANKS.map(rank => `${rank}${suit}`)));
+}
+
+function blackjackHandValue(cards) {
+  let total = 0;
+  let aces = 0;
+  for (const card of cards) {
+    const rank = String(card).slice(0, -1);
+    if (rank === "A") {
+      total += 11;
+      aces += 1;
+    } else if (["J", "Q", "K"].includes(rank)) {
+      total += 10;
+    } else {
+      total += Number(rank);
+    }
+  }
+  while (total > 21 && aces > 0) {
+    total -= 10;
+    aces -= 1;
+  }
+  return { total, soft: aces > 0 };
+}
+
+function minesMultiplier(mines, revealedCount) {
+  let multiplier = 0.96;
+  for (let index = 0; index < revealedCount; index++) {
+    multiplier *= (MINES_GRID_SIZE - index) / (MINES_GRID_SIZE - mines - index);
+  }
+  return Math.max(1, Math.floor(multiplier * 100) / 100);
+}
 
 function initialMarketTickOffset(symbol) {
   const hash = [...symbol].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
@@ -1985,6 +2089,262 @@ export async function onRequest(context) {
     };
   }
 
+  function businessType(typeId) {
+    const id = String(typeId || "").trim().toLowerCase();
+    return BUSINESS_TYPES.find(item => item.id === id) || null;
+  }
+
+  function businessNumbers(type, level) {
+    const safeLevel = clamp(Number(level || 1), 1, 10);
+    const income = Math.round(type.income * (1 + (safeLevel - 1) * 0.55));
+    const upkeep = Math.round(type.upkeep * (1 + (safeLevel - 1) * 0.35));
+    return {
+      income,
+      upkeep,
+      netIncome: Math.max(0, income - upkeep),
+      upgradeCost: safeLevel >= 10 ? null : Math.round(type.price * (0.7 + safeLevel * 0.45)),
+    };
+  }
+
+  function businessAccrual(row, type, current = nowSeconds()) {
+    const lastCollect = Number(row.last_collect || row.created_at || current);
+    const elapsed = Math.max(0, current - lastCollect);
+    const completedDays = Math.min(7, Math.floor(elapsed / dayLengthSeconds));
+    const numbers = businessNumbers(type, row.level);
+    return {
+      completedDays,
+      accrued: completedDays * numbers.netIncome,
+      nextCollectIn: completedDays >= 7 ? 0 : Math.max(0, dayLengthSeconds - (elapsed % dayLengthSeconds)),
+      ...numbers,
+    };
+  }
+
+  async function businessState(userId) {
+    const rows = await DB.prepare(`
+      SELECT id, business_type, name, level, last_collect, created_at
+      FROM player_businesses
+      WHERE user_id = ?
+      ORDER BY created_at
+    `).bind(userId).all();
+    const current = nowSeconds();
+    const ownedByType = new Map(rows.results.map(row => [row.business_type, row]));
+    const catalog = BUSINESS_TYPES.map(type => {
+      const owned = ownedByType.get(type.id);
+      if (!owned) return { ...type, owned: false };
+      return {
+        ...type,
+        owned: true,
+        businessId: owned.id,
+        businessName: owned.name,
+        level: Number(owned.level),
+        ...businessAccrual(owned, type, current),
+      };
+    });
+    return {
+      catalog,
+      owned: catalog.filter(item => item.owned),
+      totalNetPerDay: catalog.filter(item => item.owned).reduce((sum, item) => sum + item.netIncome, 0),
+      totalAccrued: catalog.filter(item => item.owned).reduce((sum, item) => sum + item.accrued, 0),
+      dayLengthSeconds,
+    };
+  }
+
+  async function recordCasinoPlay(userId, game, bet, payout, result) {
+    await DB.prepare(`
+      INSERT INTO casino_plays (id, user_id, game, bet, payout, result, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(crypto.randomUUID(), userId, game, bet, payout, String(result || "").slice(0, 240), nowSeconds()).run();
+  }
+
+  function publicMinesGame(row) {
+    if (!row) return null;
+    const revealed = JSON.parse(row.revealed_positions || "[]");
+    const multiplier = minesMultiplier(Number(row.mines), revealed.length);
+    return {
+      id: row.id,
+      bet: Number(row.bet),
+      mines: Number(row.mines),
+      revealed,
+      status: row.status,
+      multiplier,
+      payout: Number(row.payout || 0),
+      cashout: row.status === "active" ? Math.floor(Number(row.bet) * multiplier) : Number(row.payout || 0),
+      createdAt: Number(row.created_at),
+      gridSize: MINES_GRID_SIZE,
+    };
+  }
+
+  function publicBlackjackGame(row) {
+    if (!row) return null;
+    const playerCards = JSON.parse(row.player_cards || "[]");
+    const dealerCards = JSON.parse(row.dealer_cards || "[]");
+    const active = row.status === "active";
+    return {
+      id: row.id,
+      bet: Number(row.bet),
+      status: row.status,
+      payout: Number(row.payout || 0),
+      playerCards,
+      playerValue: blackjackHandValue(playerCards).total,
+      dealerCards: active && dealerCards.length > 1 ? [dealerCards[0], "??"] : dealerCards,
+      dealerValue: active ? blackjackHandValue(dealerCards.slice(0, 1)).total : blackjackHandValue(dealerCards).total,
+      createdAt: Number(row.created_at),
+    };
+  }
+
+  async function casinoState(userId) {
+    const [mines, blackjack, plays] = await Promise.all([
+      DB.prepare("SELECT * FROM casino_mines_games WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1").bind(userId).first(),
+      DB.prepare("SELECT * FROM casino_blackjack_games WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1").bind(userId).first(),
+      DB.prepare(`
+        SELECT game, bet, payout, result, created_at
+        FROM casino_plays
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 12
+      `).bind(userId).all(),
+    ]);
+    return {
+      mines: publicMinesGame(mines),
+      blackjack: publicBlackjackGame(blackjack),
+      fortuneSegments: FORTUNE_WHEEL_SEGMENTS.map(({ weight, ...segment }) => segment),
+      recent: plays.results.map(play => ({
+        game: play.game,
+        bet: Number(play.bet),
+        payout: Number(play.payout),
+        result: play.result,
+        createdAt: Number(play.created_at),
+      })),
+    };
+  }
+
+  function ticketNumbers(value) {
+    if (!Array.isArray(value) || value.length !== LOTTERY_NUMBER_COUNT) return null;
+    const numbers = value.map(number => Math.floor(Number(number))).sort((left, right) => left - right);
+    if (numbers.some(number => !Number.isFinite(number) || number < 1 || number > LOTTERY_MAX_NUMBER)) return null;
+    if (new Set(numbers).size !== LOTTERY_NUMBER_COUNT) return null;
+    return numbers;
+  }
+
+  function lotteryPrize(matches) {
+    return Number(LOTTERY_PRIZES[matches] || 0);
+  }
+
+  async function settleLotteryDraws() {
+    const current = nowSeconds();
+    const due = await DB.prepare(`
+      SELECT id, draw_at
+      FROM lottery_draws
+      WHERE status = 'open' AND draw_at <= ?
+      ORDER BY draw_at
+      LIMIT 5
+    `).bind(current).all();
+    for (const draw of due.results) {
+      const claim = await DB.prepare("UPDATE lottery_draws SET status = 'drawing' WHERE id = ? AND status = 'open'")
+        .bind(draw.id).run();
+      if (!Number(claim.meta?.changes || 0)) continue;
+      try {
+        const winning = lotteryNumbers();
+        const tickets = await DB.prepare(`
+          SELECT id, user_id, numbers
+          FROM lottery_tickets
+          WHERE draw_id = ? AND status = 'pending'
+        `).bind(draw.id).all();
+        const payouts = new Map();
+        const statements = [
+          DB.prepare("UPDATE lottery_draws SET winning_numbers = ?, status = 'closed' WHERE id = ?")
+            .bind(JSON.stringify(winning), draw.id),
+        ];
+        for (const ticket of tickets.results) {
+          const selected = JSON.parse(ticket.numbers || "[]");
+          const matches = selected.filter(number => winning.includes(number)).length;
+          const prize = lotteryPrize(matches);
+          statements.push(DB.prepare(`
+            UPDATE lottery_tickets
+            SET status = ?, matches = ?, prize = ?
+            WHERE id = ?
+          `).bind(prize > 0 ? "won" : "lost", matches, prize, ticket.id));
+          if (prize > 0) payouts.set(ticket.user_id, (payouts.get(ticket.user_id) || 0) + prize);
+        }
+        for (const [winnerId, payout] of payouts) {
+          statements.push(DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(payout, winnerId));
+        }
+        await DB.batch(statements);
+      } catch (error) {
+        await DB.prepare("UPDATE lottery_draws SET status = 'open' WHERE id = ? AND status = 'drawing'").bind(draw.id).run();
+        throw error;
+      }
+    }
+  }
+
+  async function lotteryState(userId) {
+    await settleLotteryDraws();
+    const current = nowSeconds();
+    const nextDrawAt = Math.floor(current / LOTTERY_DRAW_SECONDS) * LOTTERY_DRAW_SECONDS + LOTTERY_DRAW_SECONDS;
+    const tickets = await DB.prepare(`
+      SELECT lottery_tickets.id, lottery_tickets.numbers, lottery_tickets.status,
+        lottery_tickets.matches, lottery_tickets.prize, lottery_tickets.purchased_at,
+        lottery_draws.draw_at, lottery_draws.winning_numbers
+      FROM lottery_tickets
+      JOIN lottery_draws ON lottery_draws.id = lottery_tickets.draw_id
+      WHERE lottery_tickets.user_id = ?
+      ORDER BY lottery_tickets.purchased_at DESC
+      LIMIT 12
+    `).bind(userId).all();
+    return {
+      ticketPrice: LOTTERY_TICKET_PRICE,
+      nextDrawAt,
+      maxNumber: LOTTERY_MAX_NUMBER,
+      numberCount: LOTTERY_NUMBER_COUNT,
+      tickets: tickets.results.map(ticket => ({
+        id: ticket.id,
+        numbers: JSON.parse(ticket.numbers || "[]"),
+        status: ticket.status,
+        matches: Number(ticket.matches || 0),
+        prize: Number(ticket.prize || 0),
+        purchasedAt: Number(ticket.purchased_at),
+        drawAt: Number(ticket.draw_at),
+        winningNumbers: ticket.winning_numbers ? JSON.parse(ticket.winning_numbers) : null,
+      })),
+    };
+  }
+
+  async function finishBlackjack(row, playerCards, dealerCards, deck) {
+    const claim = await DB.prepare("UPDATE casino_blackjack_games SET status = 'resolving' WHERE id = ? AND status = 'active'")
+      .bind(row.id).run();
+    if (!Number(claim.meta?.changes || 0)) throw new Error("Blackjack hand is already settled");
+    while (true) {
+      const dealerValue = blackjackHandValue(dealerCards);
+      if (dealerValue.total > 17 || (dealerValue.total === 17 && !dealerValue.soft)) break;
+      dealerCards.push(deck.pop());
+    }
+    const playerValue = blackjackHandValue(playerCards).total;
+    const dealerValue = blackjackHandValue(dealerCards).total;
+    let status = "lost";
+    let payout = 0;
+    if (playerValue <= 21 && (dealerValue > 21 || playerValue > dealerValue)) {
+      status = "won";
+      payout = Number(row.bet) * 2;
+    } else if (playerValue <= 21 && playerValue === dealerValue) {
+      status = "push";
+      payout = Number(row.bet);
+    }
+    const statements = [DB.prepare(`
+      UPDATE casino_blackjack_games
+      SET deck = ?, player_cards = ?, dealer_cards = ?, status = ?, payout = ?
+      WHERE id = ? AND status = 'resolving'
+    `).bind(JSON.stringify(deck), JSON.stringify(playerCards), JSON.stringify(dealerCards), status, payout, row.id)];
+    if (payout > 0) statements.push(DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(payout, row.user_id));
+    try {
+      await DB.batch(statements);
+    } catch (error) {
+      await DB.prepare("UPDATE casino_blackjack_games SET status = 'active' WHERE id = ? AND status = 'resolving'").bind(row.id).run();
+      throw error;
+    }
+    await recordCasinoPlay(row.user_id, "blackjack", Number(row.bet), payout, `${status} ${playerValue}-${dealerValue}`);
+    return publicBlackjackGame({ ...row, deck: JSON.stringify(deck), player_cards: JSON.stringify(playerCards), dealer_cards: JSON.stringify(dealerCards), status, payout });
+  }
+
   let user = await currentUser();
   if (user) user = await applyAutomaticDays(user);
 
@@ -2011,6 +2371,9 @@ export async function onRequest(context) {
       response.properties = await propertyState(user.id);
       response.store = store;
       response.city = await cityState(user.id);
+      response.businesses = await businessState(user.id);
+      response.casino = await casinoState(user.id);
+      response.lottery = await lotteryState(user.id);
     }
     if (user?.is_admin) response.adminUsers = await adminUsers();
     return json(response);
@@ -2948,6 +3311,277 @@ export async function onRequest(context) {
     return json({ ok: true });
   }
 
+  if (path === "/business" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+    const type = businessType(data.businessType);
+    if (!type) return json({ error: "Unknown business" }, 404);
+    const existing = await DB.prepare("SELECT * FROM player_businesses WHERE user_id = ? AND business_type = ?")
+      .bind(user.id, type.id).first();
+    const freshUser = await userById(user.id);
+    const current = nowSeconds();
+
+    if (action === "buy") {
+      if (existing) return json({ error: "Business already owned" }, 400);
+      if (Number(freshUser.rating) < type.rating) return json({ error: `Credit rating ${type.rating} required` }, 400);
+      if (Number(freshUser.wallet) < type.price) return json({ error: `Need ${type.price} wallet` }, 400);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(type.price, user.id),
+        DB.prepare(`
+          INSERT INTO player_businesses (id, user_id, business_type, name, level, last_collect, created_at)
+          VALUES (?, ?, ?, ?, 1, ?, ?)
+        `).bind(crypto.randomUUID(), user.id, type.id, type.name, current, current),
+      ]);
+    } else if (action === "collect") {
+      if (!existing) return json({ error: "Buy this business first" }, 400);
+      const accrual = businessAccrual(existing, type, current);
+      if (accrual.accrued < 1) return json({ error: `Income is not ready. Wait ${accrual.nextCollectIn}s` }, 400);
+      const elapsed = Math.max(0, current - Number(existing.last_collect || current));
+      const newLastCollect = current - (elapsed % dayLengthSeconds);
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(accrual.accrued, user.id),
+        DB.prepare("UPDATE player_businesses SET last_collect = ? WHERE id = ?").bind(newLastCollect, existing.id),
+      ]);
+    } else if (action === "upgrade") {
+      if (!existing) return json({ error: "Buy this business first" }, 400);
+      const accrual = businessAccrual(existing, type, current);
+      if (!accrual.upgradeCost) return json({ error: "Business is at maximum level" }, 400);
+      if (Number(freshUser.wallet) + accrual.accrued < accrual.upgradeCost) {
+        return json({ error: `Need ${accrual.upgradeCost} wallet` }, 400);
+      }
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet + ? - ? WHERE id = ?")
+          .bind(accrual.accrued, accrual.upgradeCost, user.id),
+        DB.prepare("UPDATE player_businesses SET level = level + 1, last_collect = ? WHERE id = ?")
+          .bind(current, existing.id),
+      ]);
+    } else {
+      return json({ error: "Bad business action" }, 400);
+    }
+    return json({ ok: true, businesses: await businessState(user.id) });
+  }
+
+  if (path === "/lottery" && request.method === "POST") {
+    const data = await body();
+    if (String(data.action || "") !== "buy") return json({ error: "Bad lottery action" }, 400);
+    const selected = data.numbers === undefined || data.numbers === null || data.numbers.length === 0
+      ? lotteryNumbers()
+      : ticketNumbers(data.numbers);
+    if (!selected) return json({ error: `Choose ${LOTTERY_NUMBER_COUNT} unique numbers from 1 to ${LOTTERY_MAX_NUMBER}` }, 400);
+    const freshUser = await userById(user.id);
+    if (Number(freshUser.wallet) < LOTTERY_TICKET_PRICE) return json({ error: `Ticket costs ${LOTTERY_TICKET_PRICE}` }, 400);
+    const current = nowSeconds();
+    const drawAt = Math.floor(current / LOTTERY_DRAW_SECONDS) * LOTTERY_DRAW_SECONDS + LOTTERY_DRAW_SECONDS;
+    const drawId = `draw-${drawAt}`;
+    const ticketId = crypto.randomUUID();
+    await DB.batch([
+      DB.prepare(`
+        INSERT OR IGNORE INTO lottery_draws (id, draw_at, winning_numbers, status)
+        VALUES (?, ?, NULL, 'open')
+      `).bind(drawId, drawAt),
+      DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(LOTTERY_TICKET_PRICE, user.id),
+      DB.prepare(`
+        INSERT INTO lottery_tickets (
+          id, user_id, draw_id, numbers, price, status, matches, prize, purchased_at
+        ) VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, ?)
+      `).bind(ticketId, user.id, drawId, JSON.stringify(selected), LOTTERY_TICKET_PRICE, current),
+    ]);
+    return json({ ok: true, ticket: { id: ticketId, numbers: selected, drawAt, price: LOTTERY_TICKET_PRICE }, lottery: await lotteryState(user.id) });
+  }
+
+  if (path === "/casino/dice" && request.method === "POST") {
+    const data = await body();
+    const amount = money(data.amount);
+    const chosen = money(data.number);
+    if (amount < 1 || amount > user.wallet) return json({ error: "Bad amount / not enough wallet" }, 400);
+    if (chosen < 1 || chosen > 6) return json({ error: "Choose a dice number from 1 to 6" }, 400);
+    const result = secureRandomUnit() < DICE_WIN_CHANCE
+      ? chosen
+      : [1, 2, 3, 4, 5, 6].filter(number => number !== chosen)[secureRandomInt(5)];
+    const multiplier = result === chosen ? 5.5 : 0;
+    const win = Math.floor(amount * multiplier);
+    await DB.prepare("UPDATE users SET wallet = wallet - ? + ? WHERE id = ?").bind(amount, win, user.id).run();
+    await recordCasinoPlay(user.id, "dice", amount, win, `picked ${chosen}, rolled ${result}`);
+    return json({ result, chosen, multiplier, win, winChance: DICE_WIN_CHANCE });
+  }
+
+  if (path === "/casino/crash" && request.method === "POST") {
+    const data = await body();
+    const amount = money(data.amount);
+    const target = Math.floor(Number(data.target) * 100) / 100;
+    if (amount < 1 || amount > user.wallet) return json({ error: "Bad amount / not enough wallet" }, 400);
+    if (!Number.isFinite(target) || target < 1.2 || target > 10) return json({ error: "Cash-out target must be 1.20x to 10.00x" }, 400);
+    const crashPoint = Math.max(1, Math.min(50, Math.floor((CRASH_HOUSE_FACTOR / (1 - secureRandomUnit())) * 100) / 100));
+    const won = crashPoint >= target;
+    const win = won ? Math.floor(amount * target) : 0;
+    await DB.prepare("UPDATE users SET wallet = wallet - ? + ? WHERE id = ?").bind(amount, win, user.id).run();
+    await recordCasinoPlay(user.id, "crash", amount, win, `target ${target.toFixed(2)}x, crash ${crashPoint.toFixed(2)}x`);
+    return json({ target, crashPoint, won, win, houseFactor: CRASH_HOUSE_FACTOR, winChance: CRASH_HOUSE_FACTOR / target });
+  }
+
+  if (path === "/casino/wheel" && request.method === "POST") {
+    const data = await body();
+    const amount = money(data.amount);
+    if (amount < 1 || amount > user.wallet) return json({ error: "Bad amount / not enough wallet" }, 400);
+    const totalWeight = FORTUNE_WHEEL_SEGMENTS.reduce((sum, segment) => sum + segment.weight, 0);
+    let roll = secureRandomInt(totalWeight);
+    let segmentIndex = 0;
+    for (let index = 0; index < FORTUNE_WHEEL_SEGMENTS.length; index++) {
+      if (roll < FORTUNE_WHEEL_SEGMENTS[index].weight) {
+        segmentIndex = index;
+        break;
+      }
+      roll -= FORTUNE_WHEEL_SEGMENTS[index].weight;
+    }
+    const segment = FORTUNE_WHEEL_SEGMENTS[segmentIndex];
+    const win = Math.floor(amount * segment.multiplier);
+    await DB.prepare("UPDATE users SET wallet = wallet - ? + ? WHERE id = ?").bind(amount, win, user.id).run();
+    await recordCasinoPlay(user.id, "wheel", amount, win, segment.label);
+    return json({ segmentIndex, label: segment.label, multiplier: segment.multiplier, win, winChance: FORTUNE_WIN_CHANCE });
+  }
+
+  if (path === "/casino/mines" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+    let game = await DB.prepare("SELECT * FROM casino_mines_games WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1")
+      .bind(user.id).first();
+
+    if (action === "start") {
+      if (game) return json({ error: "Finish the active Mines game first" }, 400);
+      const amount = money(data.amount);
+      const mineCount = money(data.mines);
+      if (amount < 1 || amount > user.wallet) return json({ error: "Bad amount / not enough wallet" }, 400);
+      if (mineCount < MINES_MIN_COUNT || mineCount > 20) return json({ error: `Choose ${MINES_MIN_COUNT} to 20 mines` }, 400);
+      const positions = secureShuffle(Array.from({ length: MINES_GRID_SIZE }, (_, index) => index)).slice(0, mineCount);
+      game = {
+        id: crypto.randomUUID(), user_id: user.id, bet: amount, mines: mineCount,
+        mine_positions: JSON.stringify(positions), revealed_positions: "[]", status: "active", payout: 0, created_at: nowSeconds(),
+      };
+      await DB.batch([
+        DB.prepare("UPDATE users SET wallet = wallet - ? WHERE id = ?").bind(amount, user.id),
+        DB.prepare(`
+          INSERT INTO casino_mines_games (
+            id, user_id, bet, mines, mine_positions, revealed_positions, status, payout, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 'active', 0, ?)
+        `).bind(game.id, user.id, amount, mineCount, game.mine_positions, game.revealed_positions, game.created_at),
+      ]);
+      return json({ game: publicMinesGame(game) });
+    }
+
+    if (!game) return json({ error: "No active Mines game" }, 404);
+    if (action === "reveal") {
+      const position = money(data.position);
+      if (position < 0 || position >= MINES_GRID_SIZE) return json({ error: "Bad tile" }, 400);
+      const mines = JSON.parse(game.mine_positions || "[]");
+      const revealed = JSON.parse(game.revealed_positions || "[]");
+      if (revealed.includes(position)) return json({ game: publicMinesGame(game), alreadyRevealed: true });
+      revealed.push(position);
+      if (mines.includes(position)) {
+        await DB.prepare("UPDATE casino_mines_games SET revealed_positions = ?, status = 'lost' WHERE id = ?")
+          .bind(JSON.stringify(revealed), game.id).run();
+        await recordCasinoPlay(user.id, "mines", Number(game.bet), 0, `mine at ${position + 1}`);
+        return json({ game: publicMinesGame({ ...game, revealed_positions: JSON.stringify(revealed), status: "lost" }), hitMine: true, mineIndex: position });
+      }
+      const wonBoard = revealed.length >= MINES_GRID_SIZE - Number(game.mines);
+      const multiplier = minesMultiplier(Number(game.mines), revealed.length);
+      const payout = wonBoard ? Math.floor(Number(game.bet) * multiplier) : 0;
+      const statements = [DB.prepare("UPDATE casino_mines_games SET revealed_positions = ?, status = ?, payout = ? WHERE id = ?")
+        .bind(JSON.stringify(revealed), wonBoard ? "won" : "active", payout, game.id)];
+      if (payout > 0) statements.push(DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(payout, user.id));
+      await DB.batch(statements);
+      if (wonBoard) await recordCasinoPlay(user.id, "mines", Number(game.bet), payout, "cleared board");
+      return json({ game: publicMinesGame({ ...game, revealed_positions: JSON.stringify(revealed), status: wonBoard ? "won" : "active", payout }), cleared: wonBoard });
+    }
+    if (action === "cashout") {
+      const revealed = JSON.parse(game.revealed_positions || "[]");
+      if (!revealed.length) return json({ error: "Reveal at least one safe tile" }, 400);
+      const multiplier = minesMultiplier(Number(game.mines), revealed.length);
+      const payout = Math.floor(Number(game.bet) * multiplier);
+      const claim = await DB.prepare("UPDATE casino_mines_games SET status = 'resolving' WHERE id = ? AND status = 'active'")
+        .bind(game.id).run();
+      if (!Number(claim.meta?.changes || 0)) return json({ error: "Mines game is already settled" }, 409);
+      try {
+        await DB.batch([
+          DB.prepare("UPDATE casino_mines_games SET status = 'cashed_out', payout = ? WHERE id = ? AND status = 'resolving'").bind(payout, game.id),
+          DB.prepare("UPDATE users SET wallet = wallet + ? WHERE id = ?").bind(payout, user.id),
+        ]);
+      } catch (error) {
+        await DB.prepare("UPDATE casino_mines_games SET status = 'active' WHERE id = ? AND status = 'resolving'").bind(game.id).run();
+        throw error;
+      }
+      await recordCasinoPlay(user.id, "mines", Number(game.bet), payout, `cashed out ${multiplier.toFixed(2)}x`);
+      return json({ game: publicMinesGame({ ...game, status: "cashed_out", payout }) });
+    }
+    return json({ error: "Bad Mines action" }, 400);
+  }
+
+  if (path === "/casino/blackjack" && request.method === "POST") {
+    const data = await body();
+    const action = String(data.action || "");
+    let game = await DB.prepare("SELECT * FROM casino_blackjack_games WHERE user_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1")
+      .bind(user.id).first();
+
+    if (action === "start") {
+      if (game) return json({ error: "Finish the active Blackjack hand first" }, 400);
+      const amount = money(data.amount);
+      if (amount < 1 || amount > user.wallet) return json({ error: "Bad amount / not enough wallet" }, 400);
+      const deck = blackjackDeck();
+      const playerCards = [deck.pop(), deck.pop()];
+      const dealerCards = [deck.pop(), deck.pop()];
+      const playerNatural = blackjackHandValue(playerCards).total === 21;
+      const dealerNatural = blackjackHandValue(dealerCards).total === 21;
+      let status = "active";
+      let payout = 0;
+      if (playerNatural || dealerNatural) {
+        if (playerNatural && dealerNatural) {
+          status = "push";
+          payout = amount;
+        } else if (playerNatural) {
+          status = "blackjack";
+          payout = Math.floor(amount * 2.2);
+        } else {
+          status = "lost";
+        }
+      }
+      game = {
+        id: crypto.randomUUID(), user_id: user.id, bet: amount, deck: JSON.stringify(deck),
+        player_cards: JSON.stringify(playerCards), dealer_cards: JSON.stringify(dealerCards), status, payout, created_at: nowSeconds(),
+      };
+      const statements = [
+        DB.prepare("UPDATE users SET wallet = wallet - ? + ? WHERE id = ?").bind(amount, payout, user.id),
+        DB.prepare(`
+          INSERT INTO casino_blackjack_games (
+            id, user_id, bet, deck, player_cards, dealer_cards, status, payout, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(game.id, user.id, amount, game.deck, game.player_cards, game.dealer_cards, status, payout, game.created_at),
+      ];
+      await DB.batch(statements);
+      if (status !== "active") await recordCasinoPlay(user.id, "blackjack", amount, payout, status);
+      return json({ game: publicBlackjackGame(game) });
+    }
+
+    if (!game) return json({ error: "No active Blackjack hand" }, 404);
+    const deck = JSON.parse(game.deck || "[]");
+    const playerCards = JSON.parse(game.player_cards || "[]");
+    const dealerCards = JSON.parse(game.dealer_cards || "[]");
+    if (action === "hit") {
+      playerCards.push(deck.pop());
+      const value = blackjackHandValue(playerCards).total;
+      if (value > 21) {
+        await DB.prepare("UPDATE casino_blackjack_games SET deck = ?, player_cards = ?, status = 'bust' WHERE id = ? AND status = 'active'")
+          .bind(JSON.stringify(deck), JSON.stringify(playerCards), game.id).run();
+        await recordCasinoPlay(user.id, "blackjack", Number(game.bet), 0, `bust ${value}`);
+        return json({ game: publicBlackjackGame({ ...game, deck: JSON.stringify(deck), player_cards: JSON.stringify(playerCards), status: "bust" }) });
+      }
+      if (value === 21) return json({ game: await finishBlackjack(game, playerCards, dealerCards, deck) });
+      await DB.prepare("UPDATE casino_blackjack_games SET deck = ?, player_cards = ? WHERE id = ? AND status = 'active'")
+        .bind(JSON.stringify(deck), JSON.stringify(playerCards), game.id).run();
+      return json({ game: publicBlackjackGame({ ...game, deck: JSON.stringify(deck), player_cards: JSON.stringify(playerCards) }) });
+    }
+    if (action === "stand") return json({ game: await finishBlackjack(game, playerCards, dealerCards, deck) });
+    return json({ error: "Bad Blackjack action" }, 400);
+  }
+
   if (path === "/casino/slot" && request.method === "POST") {
     const data = await body();
     const amount = money(data.amount);
@@ -2955,31 +3589,31 @@ export async function onRequest(context) {
 
     const symbols = ["DIAMOND", "SEVEN", "CROWN", "BAR", "STAR", "CHERRY"];
     const triplePayouts = { DIAMOND: 200, SEVEN: 80, CROWN: 35, BAR: 15, STAR: 10, CHERRY: 6 };
-    const pick = items => items[Math.floor(Math.random() * items.length)];
-    const lossReels = () => [...symbols].sort(() => Math.random() - 0.5).slice(0, 3);
+    const pick = items => items[secureRandomInt(items.length)];
+    const lossReels = () => secureShuffle(symbols).slice(0, 3);
     const pairReels = () => {
       const pair = pick(symbols);
       const other = pick(symbols.filter(symbol => symbol !== pair));
       const reels = [pair, pair, pair];
-      reels[Math.floor(Math.random() * 3)] = other;
+      reels[secureRandomInt(3)] = other;
       return reels;
     };
 
-    const roll = Math.random();
+    const roll = secureRandomUnit();
     let reels = lossReels();
     let mult = 0;
     let label = "LOSS";
 
-    if (roll < 0.001) {
+    if (roll < SLOT_JACKPOT_CHANCE) {
       reels = ["DIAMOND", "DIAMOND", "DIAMOND"];
       mult = triplePayouts.DIAMOND;
       label = "JACKPOT";
-    } else if (roll < 0.006) {
+    } else if (roll < SLOT_TRIPLE_CHANCE) {
       const symbol = pick(symbols.filter(item => item !== "DIAMOND"));
       reels = [symbol, symbol, symbol];
       mult = triplePayouts[symbol];
       label = symbol;
-    } else if (roll < 0.02) {
+    } else if (roll < SLOT_ANY_WIN_CHANCE) {
       reels = pairReels();
       mult = 2;
       label = "PAIR";
@@ -2987,7 +3621,8 @@ export async function onRequest(context) {
 
     const win = Math.floor(amount * mult);
     await DB.prepare("UPDATE users SET wallet=wallet-?+? WHERE id=?").bind(amount, win, user.id).run();
-    return json({ reels, mult, win, label, odds: { jackpot: 0.001, anyWin: 0.02 } });
+    await recordCasinoPlay(user.id, "slot", amount, win, `${label}: ${reels.join("-")}`);
+    return json({ reels, mult, win, label, odds: { jackpot: SLOT_JACKPOT_CHANCE, anyWin: SLOT_ANY_WIN_CHANCE } });
   }
 
   if (path === "/casino/roulette" && request.method === "POST") {
@@ -2996,12 +3631,15 @@ export async function onRequest(context) {
     const chosen = money(data.number);
     if (amount < 1 || amount > user.wallet) return json({ error: "Bad amount / not enough wallet" }, 400);
     if (chosen < 0 || chosen > 36) return json({ error: "Choose 0-36" }, 400);
-    const slotIndex = Math.floor(Math.random() * ROULETTE_NUMBERS.length);
-    const result = ROULETTE_NUMBERS[slotIndex];
+    const hit = secureRandomUnit() < ROULETTE_WIN_CHANCE;
+    const losingNumbers = ROULETTE_NUMBERS.filter(number => number !== chosen);
+    const result = hit ? chosen : losingNumbers[secureRandomInt(losingNumbers.length)];
+    const slotIndex = ROULETTE_NUMBERS.indexOf(result);
     const mult = chosen === result ? (result === 0 ? 36 : 5) : 0;
     const win = amount * mult;
     await DB.prepare("UPDATE users SET wallet=wallet-?+? WHERE id=?").bind(amount, win, user.id).run();
-    return json({ result, slotIndex, wheel: ROULETTE_NUMBERS, mult, win });
+    await recordCasinoPlay(user.id, "roulette", amount, win, `picked ${chosen}, result ${result}`);
+    return json({ result, slotIndex, wheel: ROULETTE_NUMBERS, mult, win, winChance: ROULETTE_WIN_CHANCE });
   }
 
   if (path === "/admin/userAction" && request.method === "POST") {
@@ -3330,9 +3968,86 @@ async function ensureRuntimeTables(DB) {
         recorded_at INTEGER NOT NULL
       )
     `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS player_businesses (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        business_type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        level INTEGER NOT NULL DEFAULT 1,
+        last_collect INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(user_id, business_type)
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS casino_plays (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        game TEXT NOT NULL,
+        bet INTEGER NOT NULL,
+        payout INTEGER NOT NULL DEFAULT 0,
+        result TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS casino_mines_games (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        bet INTEGER NOT NULL,
+        mines INTEGER NOT NULL,
+        mine_positions TEXT NOT NULL,
+        revealed_positions TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'active',
+        payout INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS casino_blackjack_games (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        bet INTEGER NOT NULL,
+        deck TEXT NOT NULL,
+        player_cards TEXT NOT NULL,
+        dealer_cards TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        payout INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS lottery_draws (
+        id TEXT PRIMARY KEY,
+        draw_at INTEGER NOT NULL,
+        winning_numbers TEXT,
+        status TEXT NOT NULL DEFAULT 'open'
+      )
+    `),
+    DB.prepare(`
+      CREATE TABLE IF NOT EXISTS lottery_tickets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        draw_id TEXT NOT NULL,
+        numbers TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        matches INTEGER NOT NULL DEFAULT 0,
+        prize INTEGER NOT NULL DEFAULT 0,
+        purchased_at INTEGER NOT NULL
+      )
+    `),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_holdings_symbol ON market_holdings(symbol)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_trades_user_created ON market_trades(user_id, created_at)"),
     DB.prepare("CREATE INDEX IF NOT EXISTS idx_market_history_symbol_time ON market_history(symbol, recorded_at)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_player_businesses_user ON player_businesses(user_id)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_casino_plays_user_created ON casino_plays(user_id, created_at)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_casino_mines_user_status ON casino_mines_games(user_id, status)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_casino_blackjack_user_status ON casino_blackjack_games(user_id, status)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_lottery_draws_status_time ON lottery_draws(status, draw_at)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_lottery_tickets_user_time ON lottery_tickets(user_id, purchased_at)"),
+    DB.prepare("CREATE INDEX IF NOT EXISTS idx_lottery_tickets_draw ON lottery_tickets(draw_id, status)"),
     ...MARKET_ASSETS.map(asset => DB.prepare(`
       INSERT INTO market_assets (symbol, name, price, previous_price, volatility, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)

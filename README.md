@@ -36,7 +36,9 @@ Current main systems:
 - Accounts and sessions
 - Wallet, bank, debt, rating, life needs, rent, and timed work quests
 - Slot and roulette casino games
+- Dice, Crash, Mines, Blackjack, Wheel of Fortune, and lottery tickets
 - Basic market trading
+- Diversified businesses with upgrades and collectable daily income
 - Leaderboard
 - Admin user management
 
@@ -81,9 +83,21 @@ Real estate behavior:
 
 Casino behavior:
 
-- Slot jackpot chance is 0.1%.
-- Slot any-win chance is 2%.
-- Roulette uses a European wheel order. The server result drives the ball stop position and the UI uses the original simple spin-only animation.
+- Slot jackpot chance is 0.05%, and its any-win chance is 1%.
+- Roulette uses a European wheel order with a disclosed 1.5% exact-number win chance. The server result drives the ball stop position.
+- Dice has a disclosed 10% exact-number win chance and pays 5.5x.
+- Crash uses a 0.82 server-side house factor; a 2.00x target has a 41% win chance.
+- Mines and Blackjack keep active games in D1 so the browser never receives hidden mine positions or the remaining deck.
+- Mines requires 3-20 mines and defaults to 8. Blackjack dealers hit soft 17 and naturals pay 6:5.
+- Wheel of Fortune uses weighted server-side segments, with an 18% chance to win more than the bet and prizes up to 10x.
+- Lottery tickets cost 25, contain six unique numbers from 1-49, and join five-minute shared draws.
+- Lottery draws settle when the API is next visited after the draw time; prizes are credited directly to winners' wallets.
+
+Business behavior:
+
+- Players can buy a Coffee Shop, Pizza Restaurant, Hotel, Gas Station, Supermarket, Casino, Football Club, and Bank.
+- Every business has a purchase price, minimum credit rating, gross income, upkeep, and ten upgrade levels.
+- Completed business days accumulate net profit for manual collection, capped at seven days of offline accrual.
 
 Market behavior:
 

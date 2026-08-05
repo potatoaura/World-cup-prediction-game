@@ -150,6 +150,22 @@
       <div id="storeContent"></div>
     </section>
 
+    <section id="businessPanel" class="panel businessPanel hidden">
+      <div class="head">
+        <div>
+          <h2>Business Empire</h2>
+          <p class="muted">Buy companies, upgrade them and collect net daily profit.</p>
+        </div>
+        <button class="secondary" onclick="loadState()">Refresh</button>
+      </div>
+      <div class="businessSummary">
+        <span>Owned <b id="businessOwned">0</b></span>
+        <span>Net income/day <b id="businessIncome">0</b></span>
+        <span>Ready to collect <b id="businessAccrued">0</b></span>
+      </div>
+      <div id="businessCatalog" class="businessCatalog"></div>
+    </section>
+
     <section id="workPanel" class="panel workPanel hidden">
       <div class="head">
         <h2>Work Board</h2>
@@ -184,36 +200,122 @@
       </section>
     </div>
 
-    <section class="panel slotPanel">
-      <h2>Slot</h2>
-      <div class="inlineControls">
-        <input id="slotAmount" type="number" value="10" min="1">
-        <button onclick="slot()">Spin</button>
-      </div>
-      <div class="slot">
-        <div class="reel" id="reel1">BAR</div>
-        <div class="reel" id="reel2">SEVEN</div>
-        <div class="reel" id="reel3">CHERRY</div>
-      </div>
-      <p id="slotMsg" class="muted">Ready</p>
-    </section>
-
-    <section class="panel roulettePanel">
-      <h2>Roulette</h2>
-      <div class="inlineControls">
-        <input id="rouletteAmount" type="number" value="10" min="1">
-        <input id="rouletteNumber" type="number" value="17" min="0" max="36">
-        <button id="rouletteButton" onclick="roulette()">Spin</button>
-      </div>
-      <div id="wheelBox" class="wheelBox">
-        <div id="wheelCamera" class="wheelCamera">
-          <div class="wheelStageGlow"></div>
-          <canvas id="wheel"></canvas>
-          <div id="ballOrbit"><div id="ball"></div></div>
+    <section id="casinoPanel" class="panel casinoHubPanel hidden">
+      <div class="head casinoHubHead">
+        <div>
+          <span class="casinoEyebrow">CITY CASINO</span>
+          <h2>Casino District</h2>
+          <p class="muted">All results are generated and settled on the server.</p>
         </div>
-        <div class="wheelPointer"></div>
+        <button class="secondary" onclick="loadState()">Refresh</button>
       </div>
-      <p id="rouletteMsg" class="muted">Ready</p>
+      <div class="casinoGameGrid">
+        <article class="casinoGameCard diceCard">
+          <div class="casinoCardTitle"><i>D6</i><div><h3>Dice</h3><span>10% exact chance · pays 5.5x</span></div></div>
+          <div class="casinoControls">
+            <input id="diceAmount" type="number" value="10" min="1" aria-label="Dice bet">
+            <select id="diceNumber" aria-label="Dice number"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+            <button onclick="dice()">Roll</button>
+          </div>
+          <div id="diceVisual" class="diceVisual">?</div>
+          <p id="diceMsg" class="casinoMessage">Choose a number</p>
+        </article>
+
+        <article class="casinoGameCard crashCard">
+          <div class="casinoCardTitle"><i>CR</i><div><h3>Crash</h3><span>2.00x target has a 41% win chance</span></div></div>
+          <div class="casinoControls">
+            <input id="crashAmount" type="number" value="10" min="1" aria-label="Crash bet">
+            <input id="crashTarget" type="number" value="2" min="1.2" max="10" step="0.1" aria-label="Cash out multiplier">
+            <button onclick="crash()">Launch</button>
+          </div>
+          <div class="crashTrack"><i id="crashRocket"></i><b id="crashMultiplier">1.00x</b></div>
+          <p id="crashMsg" class="casinoMessage">Target 2.00x</p>
+        </article>
+
+        <article class="casinoGameCard slotCard">
+          <div class="casinoCardTitle"><i>SL</i><div><h3>Slot</h3><span>1% any win · 0.05% jackpot</span></div></div>
+          <div class="casinoControls">
+            <input id="slotAmount" type="number" value="10" min="1">
+            <button onclick="slot()">Spin</button>
+          </div>
+          <div class="slot">
+            <div class="reel" id="reel1">BAR</div>
+            <div class="reel" id="reel2">SEVEN</div>
+            <div class="reel" id="reel3">CHERRY</div>
+          </div>
+          <p id="slotMsg" class="casinoMessage">Ready</p>
+        </article>
+
+        <article class="casinoGameCard fortuneCard">
+          <div class="casinoCardTitle"><i>WF</i><div><h3>Wheel of Fortune</h3><span>18% chance to win more than your bet</span></div></div>
+          <div class="casinoControls">
+            <input id="fortuneAmount" type="number" value="10" min="1">
+            <button id="fortuneButton" onclick="fortuneWheel()">Spin</button>
+          </div>
+          <div class="fortuneWheelWrap"><div id="fortuneWheel" class="fortuneWheel"><span>x10</span></div><i></i></div>
+          <p id="fortuneMsg" class="casinoMessage">Ready</p>
+        </article>
+
+        <article class="casinoGameCard casinoWide minesCard">
+          <div class="casinoCardTitle"><i>MN</i><div><h3>Mines</h3><span>Reveal safe tiles, then cash out before hitting a mine</span></div></div>
+          <div class="casinoControls">
+            <input id="minesAmount" type="number" value="20" min="1" aria-label="Mines bet">
+            <input id="minesCount" type="number" value="8" min="3" max="20" aria-label="Mine count">
+            <button id="minesStartButton" onclick="minesStart()">Start game</button>
+            <button id="minesCashoutButton" class="secondary" onclick="minesCashout()" disabled>Cash out</button>
+          </div>
+          <div class="minesStatus"><span id="minesStatus">No active game</span><b id="minesMultiplier">1.00x</b></div>
+          <div id="minesBoard" class="minesBoard"></div>
+        </article>
+
+        <article class="casinoGameCard casinoWide blackjackCard">
+          <div class="casinoCardTitle"><i>BJ</i><div><h3>Blackjack</h3><span>Dealer hits soft 17 · blackjack pays 6:5</span></div></div>
+          <div class="casinoControls">
+            <input id="blackjackAmount" type="number" value="20" min="1">
+            <button id="blackjackStartButton" onclick="blackjackAction('start')">Deal</button>
+            <button id="blackjackHitButton" class="secondary" onclick="blackjackAction('hit')" disabled>Hit</button>
+            <button id="blackjackStandButton" class="secondary" onclick="blackjackAction('stand')" disabled>Stand</button>
+          </div>
+          <div class="blackjackTable">
+            <div><span>DEALER · <b id="dealerValue">0</b></span><div id="dealerCards" class="playingCards"></div></div>
+            <div><span>PLAYER · <b id="playerValue">0</b></span><div id="playerCards" class="playingCards"></div></div>
+          </div>
+          <p id="blackjackMsg" class="casinoMessage">Place a bet to deal</p>
+        </article>
+
+        <article class="casinoGameCard casinoWide rouletteCard">
+          <div class="casinoCardTitle"><i>RL</i><div><h3>Roulette</h3><span>Choose 0–36 · 1.5% exact chance</span></div></div>
+          <div class="casinoControls">
+            <input id="rouletteAmount" type="number" value="10" min="1">
+            <input id="rouletteNumber" type="number" value="17" min="0" max="36">
+            <button id="rouletteButton" onclick="roulette()">Spin</button>
+          </div>
+          <div id="wheelBox" class="wheelBox">
+            <div id="wheelCamera" class="wheelCamera">
+              <div class="wheelStageGlow"></div>
+              <canvas id="wheel"></canvas>
+              <div id="ballOrbit"><div id="ball"></div></div>
+            </div>
+            <div class="wheelPointer"></div>
+          </div>
+          <p id="rouletteMsg" class="casinoMessage">Ready</p>
+        </article>
+
+        <article class="casinoGameCard casinoWide lotteryCard">
+          <div class="casinoCardTitle"><i>LT</i><div><h3>Lottery</h3><span>Buy a ticket with six unique numbers from 1 to 49</span></div></div>
+          <div class="lotteryBuyRow">
+            <input id="lotteryNumbers" placeholder="3, 8, 14, 22, 31, 49" aria-label="Lottery numbers">
+            <button onclick="buyLotteryTicket(false)">Buy selected ticket</button>
+            <button class="secondary" onclick="buyLotteryTicket(true)">Quick Pick</button>
+          </div>
+          <div class="lotteryDrawInfo"><span>Ticket <b id="lotteryPrice">25</b></span><span>Next draw <b id="lotteryCountdown">--:--</b></span></div>
+          <div id="lotteryTickets" class="lotteryTickets"></div>
+        </article>
+      </div>
+      <div class="casinoRecentBlock">
+        <h3>Recent plays</h3>
+        <div id="casinoRecent" class="casinoRecent"></div>
+      </div>
     </section>
   </main>
 
