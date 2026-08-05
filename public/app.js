@@ -4,8 +4,6 @@ let ballRotation = 0;
 let rouletteBusy = false;
 let fortuneRotation = 0;
 let serverClockOffsetSeconds = 0;
-let workRefreshQueued = false;
-let lastWorkPollAt = 0;
 let storeRefreshQueued = false;
 let lastStorePollAt = 0;
 let marketDetailSymbol = "";
@@ -109,7 +107,6 @@ function render() {
   el("propertyPanel").classList.toggle("hidden", !user);
   el("storePanel").classList.toggle("hidden", !user);
   el("businessPanel").classList.toggle("hidden", !user);
-  el("workPanel").classList.toggle("hidden", !user);
   el("marketPanel").classList.toggle("hidden", !user);
   el("casinoPanel").classList.toggle("hidden", !user);
   el("adminPanel").classList.toggle("hidden", !(user && user.isAdmin));
@@ -133,7 +130,6 @@ function render() {
   renderProperties();
   renderStore();
   renderBusinesses();
-  renderWorkQuest();
   renderMarket();
   renderMarketDetail();
   renderCity();
@@ -518,11 +514,6 @@ function formatCountdown(seconds) {
   return `${minutes}:${rest}`;
 }
 
-function questRemaining(quest) {
-  if (!quest || quest.availableAt === null || quest.availableAt === undefined) return null;
-  return Math.max(0, Number(quest.availableAt) - currentServerSecond());
-}
-
 function renderClock() {
   if (!STATE.user || !el("clockTime")) return;
   const now = new Date();
@@ -548,16 +539,6 @@ function renderClock() {
     ? `Rent due ${rentDue}`
     : thirst < 25 ? "Thirsty" : hunger < 25 ? "Hungry" : "Life stable";
 
-  const quest = STATE.activeQuest;
-  if (!quest) {
-    el("clockQuest").textContent = "No work quest";
-    return;
-  }
-  if (!quest.revealed) {
-    el("clockQuest").textContent = "Finding work";
-    return;
-  }
-  el("clockQuest").textContent = "Work ready";
 }
 
 function renderLife() {
@@ -1179,107 +1160,11 @@ function repairStore(storeId) {
 }
 
 function maybePollStore() {
-  if (!STATE.user || !STATE.store?.owned || storeRefreshQueued || workRefreshQueued) return;
+  if (!STATE.user || !STATE.store?.owned || storeRefreshQueued) return;
   const now = Date.now();
   if (now - lastStorePollAt < 30000) return;
   storeRefreshQueued = true;
   loadState().finally(() => { storeRefreshQueued = false; });
-}
-
-function renderWorkQuest() {
-  const panel = el("workPanel");
-  if (!panel) return;
-  const postButton = el("postWorkBtn");
-  const completeButton = el("completeWorkBtn");
-  const box = el("workQuest");
-  if (!STATE.user) {
-    panel.classList.add("hidden");
-    return;
-  }
-
-  const quest = STATE.activeQuest;
-  if (!quest) {
-    workRefreshQueued = false;
-    postButton.disabled = false;
-    completeButton.disabled = true;
-    completeButton.textContent = "Complete quest";
-    box.innerHTML = `
-      <div class="questEmpty">
-        <b>No active job</b>
-        <span>Post ad</span>
-      </div>
-    `;
-    return;
-  }
-
-  const ready = !!quest.ready;
-  postButton.disabled = true;
-
-  if (!quest.revealed) {
-    completeButton.disabled = true;
-    completeButton.textContent = "Waiting";
-    box.innerHTML = `
-      <div class="questTop">
-        <b>Looking for a job</b>
-        <span>Ad posted</span>
-      </div>
-      <div class="questMeta">
-        <span>Quest hidden</span>
-        <span>No timer</span>
-      </div>
-    `;
-    return;
-  }
-
-  workRefreshQueued = false;
-  const progress = Number(quest.progress || 0);
-  const stepsRequired = Math.max(1, Number(quest.stepsRequired || 1));
-  const taskDone = progress >= stepsRequired;
-  const mistakes = Number(quest.mistakes || 0);
-  completeButton.disabled = !ready || !taskDone;
-  completeButton.textContent = ready ? `Collect ${quest.reward}` : "Waiting";
-  box.innerHTML = `
-    <div class="questTop">
-      <b>${esc(quest.title)}</b>
-      <span>${esc(quest.difficulty)}</span>
-    </div>
-    <p class="questDescription">${esc(quest.description)}</p>
-    <div class="questTask">
-      <b>Task</b>
-      <span>${esc(quest.objective)}</span>
-    </div>
-    <div class="workProgress">
-      <span>Case progress</span>
-      <b>${progress}/${stepsRequired}</b>
-      <i><em style="width:${Math.min(100, Math.round((progress / stepsRequired) * 100))}%"></em></i>
-      <small class="workMistakes ${mistakes >= 2 ? "danger" : ""}">Mistakes ${mistakes}/${quest.maxMistakes || 3}</small>
-    </div>
-    ${!taskDone && quest.challenge ? `
-      <div class="workChallenge">
-        <span>DECISION ${progress + 1}</span>
-        <b>${esc(quest.challenge.prompt)}</b>
-        <div class="workAnswers">
-          ${(quest.challenge.options || []).map(option => `
-            <button class="secondary" onclick="submitWorkAnswer('${esc(option.id)}')">${esc(option.label)}</button>
-          `).join("")}
-        </div>
-      </div>
-    ` : `<div class="workReady">Assignment complete. Collect the payment.</div>`}
-    <div class="questMeta">
-      <span>Reward <b>${quest.reward}</b></span>
-      <span>${taskDone ? "Ready" : "Task required"}</span>
-    </div>
-  `;
-}
-
-function maybePollWorkQuest() {
-  const quest = STATE.activeQuest;
-  if (!STATE.user || !quest || quest.revealed || workRefreshQueued) return;
-  const now = Date.now();
-  if (now - lastWorkPollAt < 15000) return;
-  lastWorkPollAt = now;
-  workRefreshQueued = true;
-  loadState().finally(() => { workRefreshQueued = false; });
 }
 
 function marketSparkline(history, direction) {
@@ -1526,37 +1411,6 @@ async function marketAction(action) {
     log(`Market ${action}: ${result.shares} ${result.symbol} for ${result.total}`);
     await loadState();
     if (marketDetailSymbol === result.symbol) await openMarketDetail(result.symbol);
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-async function postWorkAd() {
-  try {
-    const result = await api("/api/work", { action: "post" });
-    log(result.existing ? "Work ad already active" : "Work ad posted");
-    await loadState();
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-async function completeWorkQuest() {
-  try {
-    const result = await api("/api/work", { action: "complete" });
-    log(`Work quest earned ${result.reward}`);
-    await loadState();
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-async function submitWorkAnswer(answer) {
-  try {
-    const result = await api("/api/work", { action: "task", answer });
-    log(result.correct ? result.feedback : `Work mistake: ${result.feedback}`);
-    if (!result.correct) alert(result.feedback);
-    await loadState();
   } catch (error) {
     alert(error.message);
   }
@@ -2152,7 +2006,5 @@ loadState();
 setInterval(() => {
   renderClock();
   renderLotteryCountdown();
-  renderWorkQuest();
-  maybePollWorkQuest();
   maybePollStore();
 }, 1000);
