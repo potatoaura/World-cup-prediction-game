@@ -247,7 +247,7 @@
         </article>
 
         <article class="casinoGameCard fortuneCard">
-          <div class="casinoCardTitle"><i>WF</i><div><h3>Wheel of Fortune</h3><span>18% chance to win more than your bet</span></div></div>
+          <div class="casinoCardTitle"><i>WF</i><div><h3>Wheel of Fortune</h3><span>6.5% chance to win more than your bet</span></div></div>
           <div class="casinoControls">
             <input id="fortuneAmount" type="number" value="10" min="1">
             <button id="fortuneButton" onclick="fortuneWheel()">Spin</button>
@@ -257,10 +257,10 @@
         </article>
 
         <article class="casinoGameCard casinoWide minesCard">
-          <div class="casinoCardTitle"><i>MN</i><div><h3>Mines</h3><span>Reveal safe tiles, then cash out before hitting a mine</span></div></div>
+          <div class="casinoCardTitle"><i>MN</i><div><h3>Mines</h3><span>10-20 mines · reveal 2 safe tiles before cashing out</span></div></div>
           <div class="casinoControls">
             <input id="minesAmount" type="number" value="20" min="1" aria-label="Mines bet">
-            <input id="minesCount" type="number" value="8" min="3" max="20" aria-label="Mine count">
+            <input id="minesCount" type="number" value="15" min="10" max="20" aria-label="Mine count">
             <button id="minesStartButton" onclick="minesStart()">Start game</button>
             <button id="minesCashoutButton" class="secondary" onclick="minesCashout()" disabled>Cash out</button>
           </div>

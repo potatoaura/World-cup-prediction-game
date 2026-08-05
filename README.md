@@ -88,8 +88,8 @@ Casino behavior:
 - Dice has a disclosed 10% exact-number win chance and pays 5.5x.
 - Crash uses a 0.82 server-side house factor; a 2.00x target has a 41% win chance.
 - Mines and Blackjack keep active games in D1 so the browser never receives hidden mine positions or the remaining deck.
-- Mines requires 3-20 mines and defaults to 8. Blackjack dealers hit soft 17 and naturals pay 6:5.
-- Wheel of Fortune uses weighted server-side segments, with an 18% chance to win more than the bet and prizes up to 10x.
+- Mines requires 10-20 mines, defaults to 15, and requires two safe reveals before cashout. Blackjack dealers hit soft 17 and naturals pay 6:5.
+- Wheel of Fortune uses weighted server-side segments, with a 6.5% chance to win more than the bet and prizes up to 10x.
 - Lottery tickets cost 25, contain six unique numbers from 1-49, and join five-minute shared draws.
 - Lottery draws settle when the API is next visited after the draw time; prizes are credited directly to winners' wallets.
 - Five scratch-ticket designs cost 5-100 wallet and use symbol matching, number matching, or find-three rules.

@@ -332,7 +332,8 @@ try {
     session: casinoOwner,
   });
   assert(fortunePlay.segmentIndex >= 0 && fortunePlay.segmentIndex < 9, "fortune wheel segment invalid");
-  assert(fortunePlay.winChance === 0.18, "fortune wheel win chance is not 18%");
+  assert(fortunePlay.winChance === 0.065, "fortune wheel win chance is not 6.5%");
+  assert(fortunePlay.anyPayoutChance === 0.175, "fortune wheel payout chance is not 17.5%");
   const slotPlay = await request("/api/casino/slot", {
     method: "POST",
     body: { amount: 1 },
@@ -342,10 +343,10 @@ try {
   assert(slotPlay.odds?.jackpot === 0.0005 && slotPlay.odds?.anyWin === 0.01, "slot odds are not reduced");
 
   let minesResult;
-  for (let attempt = 0; attempt < 8; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     await request("/api/casino/mines", {
       method: "POST",
-      body: { action: "start", amount: 10, mines: 5 },
+      body: { action: "start", amount: 10, mines: 10 },
       session: casinoOwner,
     });
     minesResult = await request("/api/casino/mines", {
@@ -353,9 +354,16 @@ try {
       body: { action: "reveal", position: 0 },
       session: casinoOwner,
     });
+    if (minesResult.hitMine) continue;
+    minesResult = await request("/api/casino/mines", {
+      method: "POST",
+      body: { action: "reveal", position: 1 },
+      session: casinoOwner,
+    });
     if (!minesResult.hitMine) break;
   }
-  assert(minesResult && !minesResult.hitMine && minesResult.game.status === "active", "could not reach a safe Mines tile");
+  assert(minesResult && !minesResult.hitMine && minesResult.game.status === "active", "could not reveal two safe Mines tiles");
+  assert(minesResult.game.revealed.length === 2 && minesResult.game.minimumReveals === 2, "Mines cashout threshold is not two tiles");
   const minesCashout = await request("/api/casino/mines", {
     method: "POST",
     body: { action: "cashout" },

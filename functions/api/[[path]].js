@@ -17,20 +17,21 @@ const BUSINESS_TYPES = [
 ];
 
 const FORTUNE_WHEEL_SEGMENTS = [
-  { label: "BANKRUPT", multiplier: 0, weight: 28 },
-  { label: "LOSE", multiplier: 0, weight: 24 },
-  { label: "HALF", multiplier: 0.5, weight: 16 },
-  { label: "REFUND", multiplier: 1, weight: 14 },
-  { label: "x1.5", multiplier: 1.5, weight: 8 },
-  { label: "x2", multiplier: 2, weight: 5 },
-  { label: "x3", multiplier: 3, weight: 3 },
+  { label: "BANKRUPT", multiplier: 0, weight: 91 },
+  { label: "LOSE", multiplier: 0, weight: 74 },
+  { label: "HALF", multiplier: 0.5, weight: 12 },
+  { label: "REFUND", multiplier: 1, weight: 10 },
+  { label: "x1.5", multiplier: 1.5, weight: 6 },
+  { label: "x2", multiplier: 2, weight: 3 },
+  { label: "x3", multiplier: 3, weight: 2 },
   { label: "x5", multiplier: 5, weight: 1 },
   { label: "JACKPOT x10", multiplier: 10, weight: 1 },
 ];
 
 const DICE_WIN_CHANCE = 0.1;
 const CRASH_HOUSE_FACTOR = 0.82;
-const FORTUNE_WIN_CHANCE = 0.18;
+const FORTUNE_WIN_CHANCE = 0.065;
+const FORTUNE_ANY_PAYOUT_CHANCE = 0.175;
 const SLOT_JACKPOT_CHANCE = 0.0005;
 const SLOT_TRIPLE_CHANCE = 0.003;
 const SLOT_ANY_WIN_CHANCE = 0.01;
@@ -71,7 +72,8 @@ const LOTTERY_NUMBER_COUNT = 6;
 const LOTTERY_MAX_NUMBER = 49;
 const LOTTERY_PRIZES = { 2: 25, 3: 100, 4: 500, 5: 5000, 6: 50000 };
 const MINES_GRID_SIZE = 25;
-const MINES_MIN_COUNT = 3;
+const MINES_MIN_COUNT = 10;
+const MINES_MIN_REVEALS = 2;
 const BLACKJACK_SUITS = ["S", "H", "D", "C"];
 const BLACKJACK_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
 
@@ -2259,6 +2261,7 @@ export async function onRequest(context) {
       cashout: row.status === "active" ? Math.floor(Number(row.bet) * multiplier) : Number(row.payout || 0),
       createdAt: Number(row.created_at),
       gridSize: MINES_GRID_SIZE,
+      minimumReveals: MINES_MIN_REVEALS,
     };
   }
 
@@ -3617,7 +3620,14 @@ export async function onRequest(context) {
     const win = Math.floor(amount * segment.multiplier);
     await DB.prepare("UPDATE users SET wallet = wallet - ? + ? WHERE id = ?").bind(amount, win, user.id).run();
     await recordCasinoPlay(user.id, "wheel", amount, win, segment.label);
-    return json({ segmentIndex, label: segment.label, multiplier: segment.multiplier, win, winChance: FORTUNE_WIN_CHANCE });
+    return json({
+      segmentIndex,
+      label: segment.label,
+      multiplier: segment.multiplier,
+      win,
+      winChance: FORTUNE_WIN_CHANCE,
+      anyPayoutChance: FORTUNE_ANY_PAYOUT_CHANCE,
+    });
   }
 
   if (path === "/casino/mines" && request.method === "POST") {
@@ -3674,7 +3684,9 @@ export async function onRequest(context) {
     }
     if (action === "cashout") {
       const revealed = JSON.parse(game.revealed_positions || "[]");
-      if (!revealed.length) return json({ error: "Reveal at least one safe tile" }, 400);
+      if (revealed.length < MINES_MIN_REVEALS) {
+        return json({ error: `Reveal at least ${MINES_MIN_REVEALS} safe tiles` }, 400);
+      }
       const multiplier = minesMultiplier(Number(game.mines), revealed.length);
       const payout = Math.floor(Number(game.bet) * multiplier);
       const claim = await DB.prepare("UPDATE casino_mines_games SET status = 'resolving' WHERE id = ? AND status = 'active'")
