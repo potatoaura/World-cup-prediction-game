@@ -1,109 +1,34 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#fff">
-<title>The White City — visual prototype</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000">
+<title>The White City — a study in chance</title>
 <style>
-  *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff;color:#000}
-  body{font-family:Georgia,"Times New Roman",serif}.frame{position:fixed;inset:0;background:#fff;isolation:isolate}
-  .scene{position:absolute;inset:0;overflow:hidden;background:#fff}.scene>svg{width:100%;height:100%;display:block}
-  .ink{fill:#000}.paper{fill:#fff}.line{fill:none;stroke:#000;stroke-width:2;vector-effect:non-scaling-stroke}.fine{stroke-width:1}
-  .ui{position:absolute;inset:0;pointer-events:none}.mark{position:absolute;left:max(20px,4vw);top:max(18px,4vh);font:700 clamp(11px,1.1vw,14px)/1 sans-serif;letter-spacing:.24em;text-transform:uppercase}
-  .chapter{position:absolute;right:max(18px,4vw);top:max(18px,4vh);font:italic clamp(12px,1.1vw,15px)/1 Georgia,serif}
-  .instruction{position:absolute;left:50%;bottom:max(20px,4vh);transform:translateX(-50%);min-width:max-content;padding:9px 16px;background:#fff;border:1px solid #000;font:700 10px/1 sans-serif;letter-spacing:.2em;text-transform:uppercase;transition:.4s}
-  button{font:inherit;color:inherit}.hotspot{position:absolute;border:0;background:transparent;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}
-  .hotspot:focus-visible{outline:3px solid #000;outline-offset:4px}.casino-hit{left:53%;top:27%;width:25%;height:46%;transform:rotate(-1deg)}
-  .casino-hit:after{content:"ENTER";position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);padding:8px 12px;background:#000;color:#fff;font:700 10px/1 sans-serif;letter-spacing:.22em;opacity:0;transition:.25s}
-  .casino-hit:hover:after,.casino-hit:focus-visible:after{opacity:1}
-  #city{transform-origin:66% 49%;transition:transform 1.35s cubic-bezier(.76,0,.2,1),opacity .55s .7s}
-  #interior{opacity:0;transform:scale(1.08);transform-origin:50% 50%;pointer-events:none;transition:opacity .5s .8s,transform 1.2s .65s cubic-bezier(.2,.85,.2,1)}
-  .inside #city{transform:scale(4.5);opacity:0}.inside #interior{opacity:1;transform:scale(1);pointer-events:auto}.inside .casino-hit{display:none}
-  .inside .instruction{opacity:0}.back{position:absolute;left:max(18px,4vw);bottom:max(18px,4vh);padding:10px 14px;border:1px solid #000;background:#fff;cursor:pointer;pointer-events:auto;font:700 10px/1 sans-serif;letter-spacing:.18em;opacity:0;transform:translateY(12px);transition:.4s;visibility:hidden}
-  .inside .back{opacity:1;transform:none;visibility:visible}.wheel-hit{left:34%;top:31%;width:38%;height:51%;border-radius:50%;cursor:pointer;pointer-events:auto}
-  .wheel-hit:after{content:"SPIN";position:absolute;inset:38%;display:grid;place-items:center;border-radius:50%;background:#000;color:#fff;font:700 9px/1 sans-serif;letter-spacing:.15em;opacity:0;transition:.2s}.wheel-hit:hover:after,.wheel-hit:focus-visible:after{opacity:1}
-  .roulette-wheel{transform-origin:800px 505px}.ball-orbit{transform-origin:800px 505px}.spinning .roulette-wheel{animation:wheel 3.5s cubic-bezier(.12,.62,.12,1) forwards}.spinning .ball-orbit{animation:ball 3.5s cubic-bezier(.12,.7,.15,1) forwards}.spinning .camera{animation:camera 3.5s ease-in-out}.spinning .ball{animation:bounce .28s 2.35s 4 alternate}
-  .trees{animation:breathe 5s ease-in-out infinite alternate;transform-origin:50% 100%}.smoke{animation:smoke 4s ease-in-out infinite;transform-origin:center}.bird{animation:bird 8s linear infinite}.curtain-l{transform-origin:left center}.curtain-r{transform-origin:right center}.inside .curtain-l{animation:openL 1s .7s both}.inside .curtain-r{animation:openR 1s .7s both}
-  @keyframes wheel{to{transform:rotate(1260deg)}}@keyframes ball{0%{transform:rotate(0)}75%{transform:rotate(-1450deg)}100%{transform:rotate(-1540deg)}}@keyframes bounce{to{transform:translateY(12px)}}
-  @keyframes camera{0%,100%{transform:translate(0) scale(1)}35%{transform:translate(-45px,24px) scale(1.22)}70%{transform:translate(48px,-12px) scale(1.08)}}
-  @keyframes breathe{to{transform:skewX(.4deg)}}@keyframes smoke{50%{transform:translate(8px,-8px) scale(1.05)}}@keyframes bird{from{transform:translateX(-140px)}to{transform:translateX(1700px)}}@keyframes openL{to{transform:translateX(-110%)}}@keyframes openR{to{transform:translateX(110%)}}
-  @media(max-width:700px){#city{transform-origin:66% 54%}.inside #city{transform:scale(6)}.casino-hit{left:47%;top:30%;width:43%;height:42%}.mark{letter-spacing:.16em}.chapter{display:none}.instruction{white-space:normal;text-align:center;min-width:0;width:76%;line-height:1.35}.inside #interior{transform:scale(1.4)}#interior{transform:scale(1.5);transform-origin:50% 54%}.wheel-hit{left:22%;top:32%;width:56%;height:46%}}
-  @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-</style>
-</head>
-<body>
-<main class="frame" id="frame">
-  <section class="scene" aria-label="A black and white city at the edge of a northern forest">
-    <svg id="city" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="The White City and its casino">
-      <rect width="1600" height="900" class="paper"/>
-      <path class="line fine" d="M0 132 Q210 70 408 133 T805 119 T1200 127 T1600 92M0 164 Q210 108 420 158 T825 151 T1210 159 T1600 126"/>
-      <g class="bird line fine"><path d="M70 112q12-13 25 0q13-13 27 0M145 86q9-10 19 0q10-10 20 0"/></g>
-      <g class="trees">
-        <path class="ink" d="M0 250l45-112 24 58 35-112 28 75 43-136 37 118 32-82 37 98 34-61 43 125v190H0zM1220 213l39-94 27 60 38-126 35 105 31-72 43 116 37-149 45 130 33-70 52 118v193h-380z"/>
-        <g class="paper"><path d="M37 221l13-33 12 33zM91 205l15-44 13 44zM154 183l19-56 17 56zM225 213l15-43 14 43zM286 198l14-41 14 41zM1250 192l14-41 14 41zM1320 184l18-53 17 53zM1412 201l14-41 14 41zM1490 181l18-53 17 53z"/></g>
-      </g>
-      <path class="paper" stroke="#000" stroke-width="2" vector-effect="non-scaling-stroke" d="M0 384Q219 336 421 383T814 373T1200 389T1600 347V900H0z"/>
-      <path class="line" d="M-50 742L440 520 720 566 1040 492 1650 672M-80 799L463 563 721 611 1053 540 1650 730"/>
-      <g id="town" class="line">
-        <path class="paper" d="M110 499l124-84 126 84v189H110zM150 477v-99h167v100M459 452l89-64 93 64v174H459zM1061 426l91-71 99 71v205h-190zM1285 474l94-64 105 64v184h-199z"/>
-        <path d="M102 499h267M446 452h208M1047 426h216M1272 474h225M186 688V565h94v123M503 626v-91h93v91M1105 631V514h97v117M1330 658V550h103v108"/>
-        <path class="fine" d="M129 529h42v48h-42zM299 529h42v48h-42zM479 476h47v41h-47zM570 476h47v41h-47zM1082 458h43v43h-43zM1190 458h43v43h-43zM1305 500h43v42h-43zM1426 500h43v42h-43z"/>
-        <path class="ink" d="M129 529h42v48h-42zM299 529h42v48h-42zM479 476h47v41h-47zM570 476h47v41h-47zM1082 458h43v43h-43zM1190 458h43v43h-43zM1305 500h43v42h-43zM1426 500h43v42h-43z"/>
-      </g>
-      <g id="casino">
-        <path class="paper" stroke="#000" stroke-width="3" vector-effect="non-scaling-stroke" d="M755 615V314l198-142 214 142v301z"/>
-        <path class="line" d="M724 314h472L957 141zM755 350h412M789 350v265M1134 350v265M835 615V430h244v185"/>
-        <path class="fine line" d="M859 430v185M883 430v185M907 430v185M931 430v185M955 430v185M979 430v185M1003 430v185M1027 430v185M1051 430v185"/>
-        <circle cx="958" cy="268" r="48" class="ink"/><path class="paper" d="M958 230l10 28 30 1-24 18 8 29-24-17-25 17 9-29-25-18 31-1z"/>
-        <path class="ink" d="M753 350h416v25H753zM770 615h381v25H770z"/>
-        <text x="960" y="335" text-anchor="middle" class="ink" font-family="Georgia,serif" font-size="25" letter-spacing="12">CASINO</text>
-      </g>
-      <g class="smoke line fine"><path d="M566 378q-30-26 5-43q-21-28 14-43q-18-29 10-49"/></g>
-      <g class="ink"><path d="M0 800q160-93 343-44t350 21q239-41 405 5t502-37v155H0z"/></g>
-      <path class="paper" d="M0 858q182-57 357-22t348 13q215-39 404-1t491-30v82H0z"/>
-    </svg>
-
-    <svg id="interior" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="A dramatic close view of a roulette table">
-      <rect width="1600" height="900" class="paper"/>
-      <g class="camera">
-        <path class="line" d="M0 180Q400 58 800 180T1600 180V900H0zM0 660Q380 555 780 678T1600 635"/>
-        <path class="ink" d="M0 0h1600v118Q1190 77 801 133Q394 70 0 122z"/>
-        <path class="line fine" d="M220 135v355M1380 135v355M170 212h110M1325 212h110"/>
-        <g transform="translate(800 505) skewX(-9) scale(1 .62) translate(-800 -505)">
-          <ellipse cx="800" cy="505" rx="360" ry="350" class="paper" stroke="#000" stroke-width="12" vector-effect="non-scaling-stroke"/>
-          <g class="roulette-wheel">
-            <circle cx="800" cy="505" r="315" class="ink"/>
-            <circle cx="800" cy="505" r="255" class="paper"/>
-            <g class="line fine">
-              <path d="M800 190v630M485 505h630M577 282l446 446M1023 282L577 728M509 384l582 242M679 214l242 582M509 626l582-242M679 796l242-582"/>
-            </g>
-            <circle cx="800" cy="505" r="128" class="ink"/><circle cx="800" cy="505" r="75" class="paper" stroke="#000" stroke-width="4"/><circle cx="800" cy="505" r="18" class="ink"/>
-          </g>
-          <g class="ball-orbit"><circle class="ball paper" cx="800" cy="220" r="17" stroke="#000" stroke-width="7"/></g>
-        </g>
-        <path class="ink" d="M0 719q270-76 526 7t516-1q310-86 558-11v186H0z"/>
-        <path class="paper" d="M0 780q271-68 531 8t511 1q302-79 558-15v126H0z"/>
-        <g class="line fine"><path d="M80 810q210-60 417 3M1118 811q205-64 398-15M122 842q170-44 332 3M1168 848q153-48 290-20"/></g>
-      </g>
-      <g class="curtain-l"><path class="ink" d="M0 0h337q-92 198-35 377T199 711Q103 796 0 900z"/><path class="paper" d="M65 0q103 214 32 426T128 806Q238 663 181 441T236 0z"/></g>
-      <g class="curtain-r"><path class="ink" d="M1600 0h-337q92 198 35 377t103 334q96 85 199 189z"/><path class="paper" d="M1535 0q-103 214-32 426t-31 380q-110-143-53-365T1364 0z"/></g>
-    </svg>
-  </section>
-  <div class="ui">
-    <div class="mark">The White City</div><div class="chapter">A study in chance</div>
-    <div class="instruction" id="instruction">Choose the house that never sleeps</div>
-    <button class="hotspot casino-hit" id="enter" aria-label="Enter the casino"></button>
-    <button class="hotspot wheel-hit" id="spin" aria-label="Spin the roulette wheel"></button>
-    <button class="back" id="back" aria-label="Return to the city">← City</button>
-  </div>
-</main>
-<script>
-  const frame=document.querySelector('#frame'),spin=document.querySelector('#spin'),hint=document.querySelector('#instruction');
-  document.querySelector('#enter').addEventListener('click',()=>{frame.classList.add('inside');hint.textContent='Touch the wheel';setTimeout(()=>hint.style.opacity=1,1500)});
-  document.querySelector('#back').addEventListener('click',()=>{frame.classList.remove('inside','spinning');hint.textContent='Choose the house that never sleeps';hint.style.opacity=1});
-  spin.addEventListener('click',()=>{if(frame.classList.contains('spinning'))return;frame.classList.add('spinning');spin.disabled=true;setTimeout(()=>{frame.classList.remove('spinning');spin.disabled=false},3700)});
-</script>
-</body>
-</html>
-
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff}body{font-family:Arial,sans-serif}
+.stage{position:fixed;inset:0;background:#000;isolation:isolate}.shot{position:absolute;inset:-3%;width:106%;height:106%;object-fit:cover;opacity:0;transform:scale(1.04);transition:opacity .8s ease,transform 6s cubic-bezier(.16,.7,.2,1);filter:contrast(1.12)}.shot.active{opacity:1;transform:scale(1)}
+.city.active{animation:drift 10s ease-in-out infinite alternate}.door{transform-origin:51% 62%}.door.active{animation:approach 1.55s cubic-bezier(.7,0,.2,1) both}.wheel{transform-origin:61% 55%}.wheel.active{animation:wheelcam 7s ease-in-out infinite alternate}.macro{transform-origin:67% 43%}.macro.active{animation:macrocam 3.8s cubic-bezier(.2,.7,.2,1) both}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.085;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='1' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");mix-blend-mode:screen}
+.iris{position:absolute;inset:-5%;pointer-events:none;box-shadow:inset 0 0 0 0 #000;transition:box-shadow .75s}.iris.close{box-shadow:inset 0 0 0 52vmax #000}
+.title{position:absolute;left:max(18px,4vw);top:max(18px,4vh);font:800 clamp(10px,1vw,13px)/1 Arial,sans-serif;letter-spacing:.28em;text-transform:uppercase;text-shadow:0 1px #000}.chapter{position:absolute;right:max(18px,4vw);top:max(18px,4vh);font:italic clamp(13px,1.4vw,19px)/1 Georgia,serif;text-shadow:0 1px #000}
+.action{position:absolute;z-index:4;border:1px solid #fff;background:#000;color:#fff;padding:11px 16px;font:800 10px/1 Arial,sans-serif;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;transition:.2s}.action:hover,.action:focus-visible{background:#fff;color:#000;outline:0}.enter{left:60%;top:46%}.spin{left:57%;top:45%;display:none}.back{left:max(18px,4vw);bottom:max(18px,4vh);display:none}.hint{position:absolute;left:50%;bottom:max(18px,4vh);transform:translateX(-50%);padding:8px 12px;background:#000;border:1px solid #fff;white-space:nowrap;font:700 9px/1 Arial,sans-serif;letter-spacing:.18em;text-transform:uppercase;transition:.35s}.busy .action{pointer-events:none}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}.spinning .flash{animation:flash 3.6s ease}.spinning .wheel.active{animation:spinpush 3.6s cubic-bezier(.15,.65,.12,1)}
+@keyframes drift{to{transform:scale(1.07) translate(-.7%,.5%)}}@keyframes approach{from{transform:scale(1.13)}to{transform:scale(1)}}@keyframes wheelcam{to{transform:scale(1.06) translate(-1%,1%)}}@keyframes macrocam{from{transform:scale(1.18) translate(3%,-2%)}to{transform:scale(1)}}@keyframes spinpush{0%{transform:scale(1)}45%{transform:scale(1.18) rotate(-1.2deg)}100%{transform:scale(1.03)}}@keyframes flash{0%,46%,58%,100%{opacity:0}50%{opacity:.92}54%{opacity:.1}}
+@media(max-width:700px){.shot{inset:-5%;width:110%;height:110%}.city{object-position:58% center}.door{object-position:50% center}.wheel{object-position:62% center}.macro{object-position:67% center}.enter{left:50%;top:52%;transform:translateX(-50%)}.spin{left:50%;top:54%;transform:translateX(-50%)}.chapter{display:none}.hint{width:74%;white-space:normal;text-align:center;line-height:1.35}.title{letter-spacing:.18em}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style></head>
+<body><main class="stage" id="stage">
+<img class="shot city active" src="/noir/city.png" alt="A northern forest city and its mysterious casino">
+<img class="shot door" src="/noir/entrance.png" alt="The monumental casino entrance">
+<img class="shot wheel" src="/noir/roulette.png" alt="An oblique view of a roulette wheel">
+<img class="shot macro" src="/noir/ball.png" alt="The roulette ball suspended above the track">
+<div class="grain"></div><div class="flash"></div><div class="iris" id="iris"></div>
+<div class="title">The White City</div><div class="chapter">A study in chance</div>
+<button class="action enter" id="enter">Enter</button><button class="action spin" id="spin">Spin</button><button class="action back" id="back">← City</button>
+<div class="hint" id="hint">The house in the forest is awake</div>
+</main><script>
+const stage=document.querySelector('#stage'),shots=[...document.querySelectorAll('.shot')],enter=document.querySelector('#enter'),spin=document.querySelector('#spin'),back=document.querySelector('#back'),hint=document.querySelector('#hint'),iris=document.querySelector('#iris');let scene=0,busy=false;
+function cut(next,delay=560){if(busy)return;busy=true;stage.classList.add('busy');iris.classList.add('close');setTimeout(()=>{shots.forEach((s,i)=>s.classList.toggle('active',i===next));scene=next;iris.classList.remove('close');setTimeout(()=>{busy=false;stage.classList.remove('busy')},780)},delay)}
+enter.onclick=()=>{cut(1);enter.style.display='none';hint.textContent='The door has no handle';setTimeout(()=>{cut(2,300);spin.style.display='block';back.style.display='block';hint.textContent='Touch the wheel'},2100)};
+spin.onclick=()=>{if(busy)return;busy=true;stage.classList.add('busy','spinning');spin.style.display='none';hint.textContent='Nothing moves. Everything changes.';setTimeout(()=>{shots.forEach((s,i)=>s.classList.toggle('active',i===3));scene=3},1850);setTimeout(()=>{shots.forEach((s,i)=>s.classList.toggle('active',i===2));scene=2;stage.classList.remove('spinning','busy');spin.style.display='block';hint.textContent='Again?' ;busy=false},4200)};
+back.onclick=()=>{if(busy)return;cut(0,380);spin.style.display='none';back.style.display='none';enter.style.display='block';hint.textContent='The house in the forest is awake'};
+</script></body></html>
